@@ -1,0 +1,27 @@
+sigma=2.12;
+sigma1=1.34081;
+sigma2=0.948093;
+b=2.1;
+rhoG0=load('rhoG0.txt');
+rhoG1=load('rhoG1.txt');
+rhoG2=load('rhoG2.txt');
+rhoG3=load('rhoG3.txt');
+phi=load('phi.txt');
+j=0;rhoG0=rhoG0*(2*pi*(sigma^2*b^(2*j) - 2*sigma1^2))^(3/2)/sqrt(sigma^2*b^(2*j) - 2*sigma1^2);
+j=1;rhoG1=rhoG1*(2*pi*(sigma^2*b^(2*j) - 2*sigma1^2))^(3/2)/sqrt(sigma^2*b^(2*j) - 2*sigma1^2);
+j=2;rhoG2=rhoG2*(2*pi*(sigma^2*b^(2*j) - 2*sigma1^2))^(3/2)/sqrt(sigma^2*b^(2*j) - 2*sigma1^2);
+j=3;rhoG3=rhoG3*(2*pi*(sigma^2*b^(2*j) - 2*sigma1^2))^(3/2)/sqrt(sigma^2*b^(2*j) - 2*sigma1^2);
+plot(rhoG0);
+hold on;
+plot(rhoG1,'r');
+plot(rhoG2,'g');
+plot(rhoG3,'y');
+plot(phi,'k');
+plot(rhoG0+rhoG1+rhoG2+rhoG3,'b');
+hold off;
+%axis([0 1000 -0.01 0.01]);
+
+plot(phi,'k');
+hold on;
+plot(rhoG0+rhoG1+rhoG2+rhoG3,'r');
+hold off;
