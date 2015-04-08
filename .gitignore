@@ -1,6 +1,7 @@
 *~
 *.o
 *.d
+*.txt
 gpu_conv
 cpu_gse
 

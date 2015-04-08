@@ -45,6 +45,14 @@ class CpuLES {
   // Charge spreader
   CpuGaussCharge<AT,CT> gaussCharge;
 
+  // Electric current
+  int JxLen;
+  CT* Jx;
+  int JyLen;
+  CT* Jy;
+  int JzLen;
+  CT* Jz;
+  
   void calcDipoleSum(const int numCoord, const xyzq_t<CT> *xyzq,
 		     AT& dipSumX, AT& dipSumY, AT& dipSumZ);
 
@@ -61,11 +69,16 @@ class CpuLES {
 			  AT *forceX, AT *forceY, AT *forceZ);
   void interpolateElectricField(const double sigma1, const double lambdaSigma1, const int numCoord, const xyzq_t<CT> *xyzq,
 				AT *ExPart, AT *EyPart, AT *EzPart);
+  void interpolateForceJ(const double sigma1, const double lambdaSigma1, const int numCoord, const xyzq_t<CT> *xyzq,
+			 AT *forceX, AT *forceY, AT *forceZ);
   void spreadCharge1(const double sigma1, const double lambdaSigma1, const int numCoord, const xyzq_t<CT> *xyzq);
   void spreadCharge2(const double sigma2, const double lambdaSigma1);
   void initElectricFieldHolm();
+  void initElectricFieldJR();
   void initElectricField();
   double checkGaussLaw();
+  void chargeFluctuation(const double sigma, const double lambdaSigma,
+			 const int numCoord, const xyzq_t<CT> *xyzq_p, const xyzq_t<CT> *xyzq_c);
   void integrate(const CT c, const CT dt, const CT gamma2);
   void clearMagneticField();
   void setElectricField(const CpuGrid<CT>& ExIn, const CpuGrid<CT>& EyIn, const CpuGrid<CT>& EzIn);

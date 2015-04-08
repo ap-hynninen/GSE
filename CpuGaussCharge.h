@@ -27,7 +27,7 @@ private:
 		       const double boxx, const double boxy, const double boxz,
 		       const CpuGrid<CT>* phi,
 		       const CpuGrid<CT>* Ex, const CpuGrid<CT>* Ey, const CpuGrid<CT>* Ez,
-		       AT *resX, AT *resY, AT *resZ, FILE* handle=NULL);
+		       AT *resX, AT *resY, AT *resZ);
 
 public:
   CpuGaussCharge(const int sizeX, const int sizeY, const int sizeZ);
@@ -49,11 +49,11 @@ public:
 				const int numCoord, const xyzq_t<CT> *xyzq,
 				const double boxx, const double boxy, const double boxz,
 				const CpuGrid<CT>& ExM, const CpuGrid<CT>& EyM, const CpuGrid<CT>& EzM,
-				AT* Ex, AT* Ey, AT* Ez, FILE* handle=NULL);
+				AT* Ex, AT* Ey, AT* Ez);
   void interpolateElectricField(const double sigma, const double rcut,
 				const int numCoord, const xyzq_t<CT> *xyzq,
 				const double boxx, const double boxy, const double boxz,
-				const CpuGrid<CT>& phi, AT* Ex, AT* Ey, AT* Ez, FILE* handle=NULL);
+				const CpuGrid<CT>& phi, AT* Ex, AT* Ey, AT* Ez);
   void calcDipoleSum(const double boxx, const double boxy, const double boxz,
 		     const CpuGrid<CT>& rho, AT& dipSumX, AT& dipSumY, AT& dipSumZ);
   void spreadChargeToGrid(const double sigma, const double rcut,

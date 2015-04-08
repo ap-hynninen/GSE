@@ -108,7 +108,7 @@ void CpuGaussCharge<AT, CT>::interpolateLoop(const bool calcForce,
 					     const double boxx, const double boxy, const double boxz,
 					     const CpuGrid<CT>* phi,
 					     const CpuGrid<CT>* Ex, const CpuGrid<CT>* Ey, const CpuGrid<CT>* Ez,
-					     AT *resX, AT *resY, AT *resZ, FILE* handle) {
+					     AT *resX, AT *resY, AT *resZ) {
   // Sanity checks
   if (phi != NULL) {
     assert(sizeX == phi->getSizeX());
@@ -157,24 +157,23 @@ void CpuGaussCharge<AT, CT>::interpolateLoop(const bool calcForce,
     CT y = xyzq[i].y;
     CT z = xyzq[i].z;
     CT fac = (calcForce && phi != NULL) ? xyzq[i].q*pref : pref;
-    int ix = (int)round(x*inv_hx);
-    int iy = (int)round(y*inv_hy);
-    int iz = (int)round(z*inv_hz);
+    int ix = (phi != NULL) ? (int)round(x*inv_hx) : (int)round(x*inv_hx - 0.5);
+    int iy = (phi != NULL) ? (int)round(y*inv_hy) : (int)round(y*inv_hy - 0.5);
+    int iz = (phi != NULL) ? (int)round(z*inv_hz) : (int)round(z*inv_hz - 0.5);
     //printf("x y z = %lf %lf %lf | %d %d %d\n",x,y,z,ix,iy,iz);
     AT rx = (AT)0.0;
     AT ry = (AT)0.0;
     AT rz = (AT)0.0;
-    int nave = 0;
     for (int tz=iz-nz;tz <= iz+nz;tz++) {
-      CT zp = ((CT)tz)*hz;
+      CT zp = (phi != NULL) ? ((CT)tz)*hz : ((CT)tz+(CT)0.5)*hz;
       CT dz = z-zp;
       int pz = (tz + sizeZ) % sizeZ;
       for (int ty=iy-ny;ty <= iy+ny;ty++) {
-	CT yp = ((CT)ty)*hy;
+	CT yp = (phi != NULL) ? ((CT)ty)*hy : ((CT)ty+(CT)0.5)*hy;
 	CT dy = y-yp;
 	int py = (ty + sizeY) % sizeY;
 	for (int tx=ix-nx;tx <= ix+nx;tx++) {
-	  CT xp = ((CT)tx)*hx;
+	  CT xp = (phi != NULL) ? ((CT)tx)*hx : ((CT)tx+(CT)0.5)*hx;
 	  CT dx = x-xp;
 	  int px = (tx + sizeX) % sizeX;
 	  CT r2 = dx*dx + dy*dy + dz*dz;
@@ -185,7 +184,6 @@ void CpuGaussCharge<AT, CT>::interpolateLoop(const bool calcForce,
 	      rx += (AT)(r*dx);
 	      ry += (AT)(r*dy);
 	      rz += (AT)(r*dz);
-	      if (handle != NULL) fprintf(handle,"%e %e %e\n",r*dx,r*dy,r*dz);
 	    } else if (calcForce) {
 	      /*
 	      	int n  = px + (py + pz*sizeY)*sizeX;
@@ -264,17 +262,10 @@ void CpuGaussCharge<AT, CT>::interpolateLoop(const bool calcForce,
 	      rz += -xyzq[i].q*EzData[p]*dEz_dz*r;
 	      */
 	    } else {
-	      int mi = (px-1+sizeX)%sizeX + (py + pz*sizeY)*sizeX;
-	      int mj = px + ((py-1+sizeY)%sizeY + pz*sizeY)*sizeX;
-	      int mk = px + (py + ((pz-1+sizeZ)%sizeZ)*sizeY)*sizeX;
-	      int pi = (px+1)%sizeX + (py + pz*sizeY)*sizeX;
-	      int pj = px + ((py+1)%sizeY + pz*sizeY)*sizeX;
-	      int pk = px + (py + ((pz+1)%sizeZ)*sizeY)*sizeX;
-	      rx += (10.0*ExData[p] + ExData[mi] + ExData[pi]);
-	      ry += (10.0*EyData[p] + EyData[mj] + EyData[pj]);
-	      rz += (10.0*EzData[p] + EzData[mk] + EzData[pk]);
-	      nave++;
-	      if (handle != NULL) fprintf(handle,"%d %d %d %e %e %e\n",tx,ty,tz,ExData[p],EyData[p],EzData[p]);
+	      CT r = exp(-r2*inv_2sigmasq);
+	      rx += ExData[p]*r;
+	      ry += EyData[p]*r;
+	      rz += EzData[p]*r;
 	    }
 	  }
 	}
@@ -286,9 +277,9 @@ void CpuGaussCharge<AT, CT>::interpolateLoop(const bool calcForce,
       ry *= xyzq[i].q*hx*hy*hz/(8.0*pi*12.0);
       rz *= xyzq[i].q*hx*hy*hz/(8.0*pi*12.0);
     } else {
-      rx *= 1.0/12.0;
-      ry *= 1.0/12.0;
-      rz *= 1.0/12.0;
+      rx *= pref;
+      ry *= pref;
+      rz *= pref;
     }
     resX[i] = rx;
     resY[i] = ry;
@@ -327,8 +318,8 @@ void CpuGaussCharge<AT, CT>::interpolateElectricField(const double sigma, const 
 						      const int numCoord, const xyzq_t<CT> *xyzq,
 						      const double boxx, const double boxy, const double boxz,
 						      const CpuGrid<CT>& ExM, const CpuGrid<CT>& EyM, const CpuGrid<CT>& EzM,
-						      AT* Ex, AT* Ey, AT* Ez, FILE* handle) {
-  interpolateLoop(false, sigma, rcut, numCoord, xyzq, boxx, boxy, boxz, NULL, &ExM, &EyM, &EzM, Ex, Ey, Ez, handle);
+						      AT* Ex, AT* Ey, AT* Ez) {
+  interpolateLoop(false, sigma, rcut, numCoord, xyzq, boxx, boxy, boxz, NULL, &ExM, &EyM, &EzM, Ex, Ey, Ez);
 }
 
 //
@@ -338,8 +329,8 @@ template <typename AT, typename CT>
 void CpuGaussCharge<AT, CT>::interpolateElectricField(const double sigma, const double rcut,
 						      const int numCoord, const xyzq_t<CT> *xyzq,
 						      const double boxx, const double boxy, const double boxz,
-						      const CpuGrid<CT>& phi, AT* Ex, AT* Ey, AT* Ez, FILE* handle) {
-  interpolateLoop(false, sigma, rcut, numCoord, xyzq, boxx, boxy, boxz, &phi, NULL, NULL, NULL, Ex, Ey, Ez, handle);
+						      const CpuGrid<CT>& phi, AT* Ex, AT* Ey, AT* Ez) {
+  interpolateLoop(false, sigma, rcut, numCoord, xyzq, boxx, boxy, boxz, &phi, NULL, NULL, NULL, Ex, Ey, Ez);
 }
 
 //
@@ -417,8 +408,8 @@ void CpuGaussCharge<AT, CT>::spreadChargeToGrid(const double sigma, const double
   // Clear charge grid
   rho.clear();
 
-  printf("CpuGaussCharge::spreadChargeToGrid, nx=%d support=%d\n",
-	 nx,calcSupportSize(rcut, boxx, boxy, boxz));
+  printf("CpuGaussCharge::spreadChargeToGrid, rcut=%lf nx=%d support=%d\n",
+	 rcut,nx,calcSupportSize(rcut, boxx, boxy, boxz));
   
   // Spread charge on grid
   CT* rhodata = rho.getDataPointer();

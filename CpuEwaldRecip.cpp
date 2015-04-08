@@ -142,6 +142,6 @@ double CpuEwaldRecip::calcForceEnergy(const int n, const xyzq_t<double>* xyzq,
       }
     }
   }
-
+ 
   return E;
 }
