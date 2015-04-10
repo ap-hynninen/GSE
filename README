@@ -9,7 +9,6 @@ Requirements
 C++ compiler
 FFTW library
 CUDA 5.0+ (optional, for SPME calculations)
-MPI library (optional, for future use)
 
 How to run
 -----------

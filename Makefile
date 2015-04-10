@@ -25,6 +25,7 @@ MPI_FOUND := $(YES)
 else
 MPI_FOUND := $(shell which mpicc | wc -l 2> /dev/null)
 endif
+MPI_FOUND := $(NO)
 
 CUDA_COMPILER := $(shell which nvcc | wc -l 2> /dev/null)
 INTEL_COMPILER := $(shell which icc | wc -l 2> /dev/null)
