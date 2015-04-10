@@ -63,17 +63,10 @@ class CpuLES {
   ~CpuLES();
 
   double calcTotalEnergy();
-  void interpolateForceVW(const double sigma1, const double lambdaSigma1, const int numCoord, const xyzq_t<CT> *xyzq,
-			  AT *forceX, AT *forceY, AT *forceZ);
-  void interpolateForceEF(const double sigma1, const double lambdaSigma1, const int numCoord, const xyzq_t<CT> *xyzq,
-			  AT *forceX, AT *forceY, AT *forceZ);
-  void interpolateElectricField(const double sigma1, const double lambdaSigma1, const int numCoord, const xyzq_t<CT> *xyzq,
-				AT *ExPart, AT *EyPart, AT *EzPart);
-  void interpolateForceJ(const double sigma1, const double lambdaSigma1, const int numCoord, const xyzq_t<CT> *xyzq,
-			 AT *forceX, AT *forceY, AT *forceZ);
+  void interpolateForce(const double sigma1, const double lambdaSigma1, const int numCoord, const xyzq_t<CT> *xyzq,
+			AT *forceX, AT *forceY, AT *forceZ);
   void spreadCharge1(const double sigma1, const double lambdaSigma1, const int numCoord, const xyzq_t<CT> *xyzq);
   void spreadCharge2(const double sigma2, const double lambdaSigma1);
-  void initElectricFieldHolm();
   void initElectricFieldJR();
   void initElectricField();
   double checkGaussLaw();

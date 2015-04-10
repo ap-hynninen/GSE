@@ -1,0 +1,27 @@
+How to build
+-------------
+make
+
+To cleanup an old build do "make clean"
+
+Requirements
+-------------
+C++ compiler
+FFTW library
+CUDA 5.0+ (optional, for SPME calculations)
+MPI library (optional, for future use)
+
+How to run
+-----------
+Usage: cpu_gse -r r -L L -M M -sigma sigma -order order -seed seed
+
+Where:
+r     = distance between pair of charges
+L     = box side length
+M     = number of grid points per side length
+sigma = Gaussian width
+order = SPME order, 4, 6, or 8.
+seed  = random number seed
+
+For example
+./cpu_gse -r 1.0 -L 20 -M 20 -sigma 2.121320344

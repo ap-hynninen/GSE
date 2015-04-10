@@ -22,9 +22,9 @@ void CpuGreensFuncG2<T>::mul(const int nfftX, const int nfftY, const int nfftZ,
   const int halfNfftY = nfftY/2 + (nfftY % 2);
   const int halfNfftZ = nfftZ/2 + (nfftZ % 2);
 
-  const T twopi_boxx = (T)(2.0*pi/boxx);
-  const T twopi_boxy = (T)(2.0*pi/boxy);
-  const T twopi_boxz = (T)(2.0*pi/boxz);
+  const T twopi_boxx = (T)(2.0*pi_dbl/boxx);
+  const T twopi_boxy = (T)(2.0*pi_dbl/boxy);
+  const T twopi_boxz = (T)(2.0*pi_dbl/boxz);
   //const T inv_vol = (T)(1.0/(boxx*boxy*boxz));
   const T inv_vol = (T)(1.0/(double)(nfftX*nfftY*nfftZ));
   const T sigmafac = (T)(sigma*sigma/2.0);

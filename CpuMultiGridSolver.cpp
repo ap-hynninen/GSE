@@ -12,7 +12,7 @@ CpuMultiGridSolver<T>::CpuMultiGridSolver(const int sizeFinestX, const int sizeF
   assert(sizeFinestX == sizeFinestZ);
   
   // Goal is to coarse down to size 4
-  numLevel = (int)log2((double)sizeFinestX/16.0) + 1;
+  numLevel = 1;//(int)log2((double)sizeFinestX/16.0) + 1;
   rhoVec.reserve(numLevel);
   phiVec.reserve(numLevel);
   resVec.reserve(numLevel);
@@ -71,7 +71,7 @@ void CpuMultiGridSolver<T>::run(CpuGrid<T>& phi, const CpuGrid<T>& rho,
       for (int j=0;j < numPreRelax;j++) relaxRBGS(*phiFine, *rhoFine, boxx, boxy, boxz, laplaceRep);
       // Calculate residual
       CpuGrid<T>* resFine = resVec.at(i);
-      calculateResidual(*phiFine, *rhoFine, *resFine, boxx, boxy, boxz);
+      calculateResidual(*phiFine, *rhoFine, *resFine, boxx, boxy, boxz, laplaceRep);
       printf("down V residual: %e\n",resFine->maxAbsValue());
       // Move to next coarser level
       CpuGrid<T>* rhoCoarse = rhoVec.at(i+1);
@@ -84,12 +84,15 @@ void CpuMultiGridSolver<T>::run(CpuGrid<T>& phi, const CpuGrid<T>& rho,
     // Find solution at the coarsest grid
     const CpuGrid<T>* rhoCoarsest = (numLevel <= 1) ? &rho : rhoVec.at(numLevel-1);
     CpuGrid<T>* phiCoarsest = (numLevel <= 1) ? &phi : phiVec.at(numLevel-1);
-  
-    for (int j=0;j < 100;j++) relaxRBGS(*phiCoarsest, *rhoCoarsest, boxx, boxy, boxz, SEVEN_POINT);
+
+    int laplaceRepFinest = HERMITIAN;
+    for (int j=0;j < 200;j++) {
+      relaxRBGS(*phiCoarsest, *rhoCoarsest, boxx, boxy, boxz, laplaceRepFinest);
+    }
     phiCoarsest->save("phiCoarsest.txt");
     rhoCoarsest->save("rhoCoarsest.txt");
 
-    calculateResidual(*phiCoarsest, *rhoCoarsest, *resVec.at(numLevel-1), boxx, boxy, boxz);
+    calculateResidual(*phiCoarsest, *rhoCoarsest, *resVec.at(numLevel-1), boxx, boxy, boxz, laplaceRepFinest);
     resVec.at(numLevel-1)->save("resCoarsest.txt");
     printf("residual: %e\n",resVec.at(numLevel-1)->maxAbsValue());
   
@@ -108,7 +111,7 @@ void CpuMultiGridSolver<T>::run(CpuGrid<T>& phi, const CpuGrid<T>& rho,
       int laplaceRep = SEVEN_POINT;
       for (int j=0;j < numPostRelax;j++) relaxRBGS(*phiFine, *rhoFine, boxx, boxy, boxz, laplaceRep);
       //
-      calculateResidual(*phiFine, *rhoFine, *tmp, boxx, boxy, boxz);
+      calculateResidual(*phiFine, *rhoFine, *tmp, boxx, boxy, boxz, laplaceRep);
       printf("up V residual: %e\n",tmp->maxAbsValue());
     }
   }
@@ -119,7 +122,8 @@ void CpuMultiGridSolver<T>::run(CpuGrid<T>& phi, const CpuGrid<T>& rho,
 //
 template <typename T>
 void CpuMultiGridSolver<T>::calculateResidual(const CpuGrid<T>& phi, const CpuGrid<T>& rho, CpuGrid<T>& res,
-					      const double boxx, const double boxy, const double boxz) {
+					      const double boxx, const double boxy, const double boxz,
+					      const int laplaceRep) {
   // Sanity checks
   assert(phi.getSizeX() == rho.getSizeX());
   assert(phi.getSizeY() == rho.getSizeY());
@@ -142,16 +146,54 @@ void CpuMultiGridSolver<T>::calculateResidual(const CpuGrid<T>& phi, const CpuGr
   T inv_hx2 = (T)inv_hx2d;
   T inv_hy2 = (T)inv_hy2d;
   T inv_hz2 = (T)inv_hz2d;
-  
+
+  T a_A;
+  T inv_a_A;
+  T a_B;
+  T b_B;
+  T bx_A, by_A, bz_A;
+  T cxy_A, cxz_A, cyz_A;
+  if (laplaceRep == HERMITIAN) {
+    double sum_inv = inv_hx2d + inv_hy2d + inv_hz2d;
+    double a_Ad = 4.0/3.0*sum_inv;
+    a_A = (T)a_Ad;
+    inv_a_A = (T)(1.0/a_Ad);
+    a_B = (T)(-0.5);
+    b_B = (T)(-1.0/12.0);
+    bx_A = (T)(-5.0/6.0*inv_hx2d + sum_inv/6.0);
+    by_A = (T)(-5.0/6.0*inv_hy2d + sum_inv/6.0);
+    bz_A = (T)(-5.0/6.0*inv_hz2d + sum_inv/6.0);
+    cxy_A = (T)(-1.0/12.0*(inv_hx2d + inv_hy2d));
+    cxz_A = (T)(-1.0/12.0*(inv_hx2d + inv_hz2d));
+    cyz_A = (T)(-1.0/12.0*(inv_hy2d + inv_hz2d));
+  }
+
   for (int iz=0;iz < sizeZ;iz++) {
     for (int iy=0;iy < sizeY;iy++) {
       for (int ix=0;ix < sizeX;ix++) {
 	int p = ix + (iy + iz*sizeY)*sizeX;
-	T twoPhiVal = ((T)2.0)*phi.getDataValue(ix, iy, iz);
-	resData[p] = ((phi.getDataValue(ix-1, iy, iz) - twoPhiVal + phi.getDataValue(ix+1, iy, iz))*inv_hx2 +
-		      (phi.getDataValue(ix, iy-1, iz) - twoPhiVal + phi.getDataValue(ix, iy+1, iz))*inv_hy2 +
-		      (phi.getDataValue(ix, iy, iz-1) - twoPhiVal + phi.getDataValue(ix, iy, iz+1))*inv_hz2 -
-		      rho.getDataValue(ix, iy, iz));
+	if (laplaceRep == SEVEN_POINT) {
+	  T twoPhiVal = ((T)2.0)*phi.getDataValue(ix, iy, iz);
+	  resData[p] = ((phi.getDataValue(ix-1, iy, iz) - twoPhiVal + phi.getDataValue(ix+1, iy, iz))*inv_hx2 +
+			(phi.getDataValue(ix, iy-1, iz) - twoPhiVal + phi.getDataValue(ix, iy+1, iz))*inv_hy2 +
+			(phi.getDataValue(ix, iy, iz-1) - twoPhiVal + phi.getDataValue(ix, iy, iz+1))*inv_hz2 -
+			rho.getDataValue(ix, iy, iz));
+	} else {
+	  T B_rho = a_B*rho.getDataValue(ix, iy, iz) +
+	    b_B*(rho.getDataValue(ix-1, iy, iz) + rho.getDataValue(ix+1, iy, iz)) +
+	    b_B*(rho.getDataValue(ix, iy-1, iz) + rho.getDataValue(ix, iy+1, iz)) +
+	    b_B*(rho.getDataValue(ix, iy, iz-1) + rho.getDataValue(ix, iy, iz+1));
+	  T bA_phi = bx_A*(phi.getDataValue(ix-1, iy, iz) + phi.getDataValue(ix+1, iy, iz)) +
+	    by_A*(phi.getDataValue(ix, iy-1, iz) + phi.getDataValue(ix, iy+1, iz)) +
+	    bz_A*(phi.getDataValue(ix, iy, iz-1) + phi.getDataValue(ix, iy, iz+1));
+	  T cA_phi = cxy_A*(phi.getDataValue(ix-1, iy-1, iz) + phi.getDataValue(ix-1, iy+1, iz) +
+			    phi.getDataValue(ix+1, iy-1, iz) + phi.getDataValue(ix+1, iy+1, iz)) +
+	    cxz_A*(phi.getDataValue(ix-1, iy, iz-1) + phi.getDataValue(ix-1, iy, iz+1) +
+		   phi.getDataValue(ix+1, iy, iz-1) + phi.getDataValue(ix+1, iy, iz+1)) +
+	    cyz_A*(phi.getDataValue(ix, iy-1, iz-1) + phi.getDataValue(ix, iy-1, iz+1) +
+		   phi.getDataValue(ix, iy+1, iz-1) + phi.getDataValue(ix, iy+1, iz+1));
+	  resData[p] = a_A*phi.getDataValue(ix, iy, iz) + bA_phi + cA_phi -B_rho;
+	}
       }
     }
   }
@@ -221,18 +263,19 @@ void CpuMultiGridSolver<T>::relaxRBGS(CpuGrid<T>& phi, const CpuGrid<T>& rho,
 			  (phi.getDataValue(ix, iy, iz-1) + phi.getDataValue(ix, iy, iz+1))*inv_hz2 -
 			  rho.getDataValue(ix, iy, iz))*fac;
 	  } else {
-	    T B_rho = a_B + b_B*(rho.getDataValue(ix-1, iy, iz) + rho.getDataValue(ix+1, iy, iz)) +
+	    T B_rho = a_B*rho.getDataValue(ix, iy, iz) +
+	      b_B*(rho.getDataValue(ix-1, iy, iz) + rho.getDataValue(ix+1, iy, iz)) +
 	      b_B*(rho.getDataValue(ix, iy-1, iz) + rho.getDataValue(ix, iy+1, iz)) +
 	      b_B*(rho.getDataValue(ix, iy, iz-1) + rho.getDataValue(ix, iy, iz+1));
 	    T bA_phi = bx_A*(phi.getDataValue(ix-1, iy, iz) + phi.getDataValue(ix+1, iy, iz)) +
 	      by_A*(phi.getDataValue(ix, iy-1, iz) + phi.getDataValue(ix, iy+1, iz)) +
 	      bz_A*(phi.getDataValue(ix, iy, iz-1) + phi.getDataValue(ix, iy, iz+1));
-	    T cA_phi = cxy_A*(phi.getDataValue(ix-1, iy, iz) + phi.getDataValue(ix+1, iy, iz) +
-			      phi.getDataValue(ix, iy-1, iz) + phi.getDataValue(ix, iy+1, iz)) +
-	      cxz_A*(phi.getDataValue(ix-1, iy, iz) + phi.getDataValue(ix+1, iy, iz) +
-		     phi.getDataValue(ix, iy, iz-1) + phi.getDataValue(ix, iy, iz+1)) +
-	      cyz_A*(phi.getDataValue(ix, iy-1, iz) + phi.getDataValue(ix, iy+1, iz) +
-		     phi.getDataValue(ix, iy, iz-1) + phi.getDataValue(ix, iy, iz+1));
+	    T cA_phi = cxy_A*(phi.getDataValue(ix-1, iy-1, iz) + phi.getDataValue(ix-1, iy+1, iz) +
+			      phi.getDataValue(ix+1, iy-1, iz) + phi.getDataValue(ix+1, iy+1, iz)) +
+	      cxz_A*(phi.getDataValue(ix-1, iy, iz-1) + phi.getDataValue(ix-1, iy, iz+1) +
+		     phi.getDataValue(ix+1, iy, iz-1) + phi.getDataValue(ix+1, iy, iz+1)) +
+	      cyz_A*(phi.getDataValue(ix, iy-1, iz-1) + phi.getDataValue(ix, iy-1, iz+1) +
+		     phi.getDataValue(ix, iy+1, iz-1) + phi.getDataValue(ix, iy+1, iz+1));
 	    phiData[p] = inv_a_A*(B_rho - bA_phi - cA_phi);
 	  }
 	}

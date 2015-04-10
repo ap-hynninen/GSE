@@ -6,7 +6,8 @@
 // aphynninen@hotmail.com
 //
 #include <cmath>
-#include "cuda_utils.h"
+#include <cstdlib>
+#include "cuda/cuda_utils.h"
 #include "Grid.h"
 
 // Forward declaration of CudaGrid

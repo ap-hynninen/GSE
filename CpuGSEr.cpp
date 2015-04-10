@@ -49,7 +49,7 @@ void CpuGSEr<AT, CT>::solvePoisson() {
   this->phiM.clear();
   CpuGrid<CT> rhoTmp(this->rhoS.getSizeX(), this->rhoS.getSizeY(), this->rhoS.getSizeZ());
   rhoTmp.copy(this->rhoS);
-  rhoTmp.scale(-4.0*pi);
+  rhoTmp.scale(-4.0*pi_dbl);
   multiGridSolver.run(this->phiM, rhoTmp, this->boxx, this->boxy, this->boxz);
 }
 

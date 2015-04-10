@@ -6,6 +6,6 @@ struct xyzq_t {
   T x, y, z, q;
 };
 
-const double pi = 3.14159265358979323846;
+const double pi_dbl = 3.14159265358979323846;
 
 #endif // TYPESGSE_H

@@ -3,7 +3,7 @@
 #include <iostream>
 #include <vector>
 #include "TypesGSE.h"
-#include "cuda_utils.h"
+#include "cuda/cuda_utils.h"
 #include "CudaConvolution.h"
 #include "CpuConvolution.h"
 #include "CpuGrid.h"
@@ -30,7 +30,7 @@ void test(const int n, const int kernelRadius) {
 
   const double sigma = 2.12;
   const double inv_2sigmasq = 1.0/(2.0*sigma*sigma);
-  const double pref = pow(2*pi*sigma*sigma,-3.0/2.0);
+  const double pref = pow(2*pi_dbl*sigma*sigma,-3.0/2.0);
   
   for (int ii=-kernelRadius;ii <= kernelRadius;ii++) {
     kernelX[ii+kernelRadius] = exp(-(ii*ii)*inv_2sigmasq);

@@ -143,7 +143,7 @@ void CpuGaussCharge<AT, CT>::interpolateLoop(const bool calcForce,
   const CT hz = (CT)hzd;
   const CT rcut2 = (CT)(rcut*rcut);
   const CT inv_2sigmasq = (CT)(1.0/(2.0*sigma*sigma));
-  const CT pref = (phi != NULL) ? (CT)(pow(2.0*pi,-3.0/2.0)*hxd*hyd*hzd*pow(sigma,-5.0)) : (CT)(pow(2.0*pi*sigma*sigma,-3.0/2.0)*hxd*hyd*hzd);
+  const CT pref = (phi != NULL) ? (CT)(pow(2.0*pi_dbl,-3.0/2.0)*hxd*hyd*hzd*pow(sigma,-5.0)) : (CT)(pow(2.0*pi_dbl*sigma*sigma,-3.0/2.0)*hxd*hyd*hzd);
   const CT* phiData = (phi != NULL) ? phi->getDataPointer() : NULL;
   const CT* ExData = (phi == NULL) ? Ex->getDataPointer() : NULL;
   const CT* EyData = (phi == NULL) ? Ey->getDataPointer() : NULL;
@@ -273,9 +273,9 @@ void CpuGaussCharge<AT, CT>::interpolateLoop(const bool calcForce,
     }
     if (phi != NULL) {
     } else if (calcForce) {
-      rx *= xyzq[i].q*hx*hy*hz/(8.0*pi*12.0);
-      ry *= xyzq[i].q*hx*hy*hz/(8.0*pi*12.0);
-      rz *= xyzq[i].q*hx*hy*hz/(8.0*pi*12.0);
+      rx *= xyzq[i].q*hx*hy*hz/(8.0*pi_dbl*12.0);
+      ry *= xyzq[i].q*hx*hy*hz/(8.0*pi_dbl*12.0);
+      rz *= xyzq[i].q*hx*hy*hz/(8.0*pi_dbl*12.0);
     } else {
       rx *= pref;
       ry *= pref;
@@ -403,7 +403,7 @@ void CpuGaussCharge<AT, CT>::spreadChargeToGrid(const double sigma, const double
   const CT hz = (CT)hzd;
   const CT rcut2 = (CT)(rcut*rcut);
   const CT inv_2sigmasq = (CT)(1.0/(2.0*sigma*sigma));
-  const CT pref = (CT)pow(2.0*pi*sigma*sigma,-3.0/2.0);
+  const CT pref = (CT)pow(2.0*pi_dbl*sigma*sigma,-3.0/2.0);
 
   // Clear charge grid
   rho.clear();
@@ -469,7 +469,7 @@ void CpuGaussCharge<AT, CT>::spreadChargeOnGrid(const double sigma, const double
   const int ny = (int)ceil(rcut/hyd);
   const int nz = (int)ceil(rcut/hzd);
   const CT inv_2sigmasq = (CT)(1.0/(2.0*sigma*sigma));
-  const CT pref = (CT)(pow(2.0*pi*sigma*sigma,-3.0/2.0)*hxd*hyd*hzd);
+  const CT pref = (CT)(pow(2.0*pi_dbl*sigma*sigma,-3.0/2.0)*hxd*hyd*hzd);
   const CT hxsq = (CT)(hxd*hxd);
   const CT hysq = (CT)(hyd*hyd);
   const CT hzsq = (CT)(hzd*hzd);

@@ -6,6 +6,8 @@
 #include "TypesGSE.h"
 #include "CpuLES.h"
 
+#define E_CURL_TYPE 2
+
 //
 // Class creator
 //
@@ -59,7 +61,7 @@ double CpuLES<AT,CT>::calcTotalEnergy() {
 	int pj = ix + ((iy+1)%sizeY + iz*sizeY)*sizeX;
 	int mk = ix + (iy + ((iz-1+sizeZ)%sizeZ)*sizeY)*sizeX;
 	int pk = ix + (iy + ((iz+1)%sizeZ)*sizeY)*sizeX;
-	
+
 	double Ex_mi = ExData[mi];
 	double Ex_nn = ExData[n];
 	double Ex_pi = ExData[pi];
@@ -79,92 +81,8 @@ double CpuLES<AT,CT>::calcTotalEnergy() {
       }
     }
   }
-  Utot *= ccelec*hd*hd*hd/(8.0*pi);
+  Utot *= ccelec*hd*hd*hd/(8.0*pi_dbl);
   return Utot;
-}
-
-//
-// Interpolate force
-//
-template <typename AT, typename CT>
-void CpuLES<AT, CT>::interpolateForceVW(const double sigma1, const double lambdaSigma1, const int numCoord, const xyzq_t<CT> *xyzq,
-					AT *forceX, AT *forceY, AT *forceZ) {
-
-  gaussCharge.interpolateForce(sigma1, lambdaSigma1*sqrt(2.0)*sigma1, numCoord, xyzq,
-			       boxx, boxy, boxz, Ex, Ey, Ez, forceX, forceY, forceZ);
-  for (int i=0;i < numCoord;i++) {
-    forceX[i] *= ccelec;
-    forceY[i] *= ccelec;
-    forceZ[i] *= ccelec;
-  }
-  AT dipSumX, dipSumY, dipSumZ;
-  gaussCharge.calcDipoleSum(boxx, boxy, boxz, rho, dipSumX, dipSumY, dipSumZ);
-  AT EdipX = 4.0*pi/(boxx*boxy*boxz)*dipSumX;
-  AT EdipY = 4.0*pi/(boxx*boxy*boxz)*dipSumY;
-  AT EdipZ = 4.0*pi/(boxx*boxy*boxz)*dipSumZ;
-  for (int i=0;i < numCoord;i++) {
-    CT q = (CT)(xyzq[i].q*ccelec);
-    //printf("%lf\n",-q*EdipX);
-    //forceX[i] -= q*EdipX;
-    //forceY[i] -= q*EdipY;
-    //forceZ[i] -= q*EdipZ;
-  }
-
-}
-
-//
-// Interpolate force
-//
-template <typename AT, typename CT>
-void CpuLES<AT, CT>::interpolateForceEF(const double sigma1, const double lambdaSigma1, const int numCoord, const xyzq_t<CT> *xyzq,
-					AT *forceX, AT *forceY, AT *forceZ) {
-
-  AT* ExPart = new AT[numCoord];
-  AT* EyPart = new AT[numCoord];
-  AT* EzPart = new AT[numCoord];
-
-  interpolateElectricField(sigma1, lambdaSigma1, numCoord, xyzq, ExPart, EyPart, EzPart);
-  for (int i=0;i < numCoord;i++) {
-    CT q = xyzq[i].q*ccelec;
-    forceX[i] = ExPart[i]*q;
-    forceY[i] = EyPart[i]*q;
-    forceZ[i] = EzPart[i]*q;
-  }
-  delete [] ExPart;
-  delete [] EyPart;
-  delete [] EzPart;
-
-  printf("LES(force): %e %e %e\n",forceX[0],forceY[0],forceZ[0]);
-  printf("LES(force): %e %e %e\n",forceX[1],forceY[1],forceZ[1]);
-
-  // Dipole part
-  AT dipSumX, dipSumY, dipSumZ;
-  gaussCharge.calcDipoleSum(boxx, boxy, boxz, rho, dipSumX, dipSumY, dipSumZ);
-  AT EdipX = 4.0*pi/(boxx*boxy*boxz)*dipSumX;
-  AT EdipY = 4.0*pi/(boxx*boxy*boxz)*dipSumY;
-  AT EdipZ = 4.0*pi/(boxx*boxy*boxz)*dipSumZ;
-  printf("Fdip: %e %e %e\n",EdipX*ccelec,EdipY*ccelec,EdipZ*ccelec);
-  
-  for (int i=0;i < numCoord;i++) {
-    CT q = xyzq[i].q*ccelec;
-    forceX[i] += q*EdipX;
-    forceY[i] += q*EdipY;
-    forceZ[i] += q*EdipZ;
-  }
-
-  //printf("LES(dip): %e | %e\n",xyzq[0].q*ccelec*EdipX,xyzq[1].q*ccelec*EdipX);
-}
-
-//
-// Interpolate force from mesh-based potential
-//
-template <typename AT, typename CT>
-void CpuLES<AT, CT>::interpolateElectricField(const double sigma1, const double lambdaSigma1, const int numCoord, const xyzq_t<CT> *xyzq,
-					      AT *ExPart, AT *EyPart, AT *EzPart) {
-
-  gaussCharge.interpolateElectricField(sigma1, lambdaSigma1*sqrt(2.0)*sigma1, numCoord, xyzq,
-				       boxx, boxy, boxz, Ex, Ey, Ez, ExPart, EyPart, EzPart);
-
 }
 
 //
@@ -194,12 +112,6 @@ template <typename AT, typename CT>
 void CpuLES<AT,CT>::spreadCharge1(const double sigma1, const double lambdaSigma1, const int numCoord, const xyzq_t<CT> *xyzq) {
   gaussCharge.spreadChargeToGrid(sigma1, lambdaSigma1*sqrt(2.0)*sigma1, numCoord, xyzq,
 				 boxx, boxy, boxz, rho);
-  //const int sizeX = rho.getSizeX();
-  //const CT h = (CT)(boxx/(double)sizeX);
-  //printf("h*h*h = %lf\n",h*h*h);
-  //rho.scale(h*h*h);
-  //gaussCharge.spreadChargeToGrid(sigma, 3.0*sqrt(2.0)*sigma, numCoord, xyzq,
-  //				 boxx, boxy, boxz, rho);
 }
 
 //
@@ -240,7 +152,7 @@ double CpuLES<AT,CT>::checkGaussLaw() {
   const int sizeY = rho.getSizeY();
   const int sizeZ = rho.getSizeZ();
   const double hd = boxx/(double)sizeX;
-  const CT fourpi_h = (CT)(4.0*pi*hd);
+  const CT fourpi_h = (CT)(4.0*pi_dbl*hd);
   CT* ExData = Ex.getDataPointer();
   CT* EyData = Ey.getDataPointer();
   CT* EzData = Ez.getDataPointer();
@@ -263,74 +175,8 @@ double CpuLES<AT,CT>::checkGaussLaw() {
 }
 
 //
-// Initialize electric field
-//
-template <typename AT, typename CT>
-void CpuLES<AT,CT>::initElectricFieldHolm() {
-  const int sizeX = rho.getSizeX();
-  const int sizeY = rho.getSizeY();
-  const int sizeZ = rho.getSizeZ();
-  const int size = rho.getSize();
-  const double inv_hd = (double)sizeX/boxx;
-  // NOTE: factor 4*pi is included in inv_h2
-  const CT inv_h2 = (CT)(4.0*pi*inv_hd*inv_hd);
-  CT* ExData = Ex.getDataPointer();
-  CT* EyData = Ey.getDataPointer();
-  CT* EzData = Ez.getDataPointer();
-  const CT* rhoData = rho.getDataPointer();
-  bool *ExSet = new bool[size];
-  bool *EySet = new bool[size];
-  bool *EzSet = new bool[size];
-  for (int i=0;i < size;i++) {
-    ExData[i] = (CT)0.0;
-    EyData[i] = (CT)0.0;
-    EzData[i] = (CT)0.0;
-  }
-  for (int iz=0;iz < sizeZ;iz++) {
-    // Plane
-    CT Qz = (CT)0.0;
-    for (int iy=0;iy < sizeY;iy++) {
-      for (int ix=0;ix < sizeX;ix++) {
-	int n = ix + (iy + iz*sizeY)*sizeX;
-	Qz += rhoData[n];
-      }
-    }
-    Qz /= (CT)(sizeX*sizeY);
-    CT Qplane = Qz*inv_h2;
-    for (int iy=0;iy < sizeY;iy++) {
-      for (int ix=0;ix < sizeX;ix++) {
-	int n = ix + (iy + iz*sizeY)*sizeX;
-	int np = ix + (iy + ((iz+1)%sizeZ)*sizeY)*sizeX;
-	EzData[np] = EzData[n] + Qplane;
-      }
-    }
-    // Line
-    for (int iy=0;iy < sizeY;iy++) {
-      CT Qy = (CT)0.0;
-      for (int ix=0;ix < sizeX;ix++) {
-	int n = ix + (iy + iz*sizeY)*sizeX;
-	Qy += rhoData[n];
-      }
-      Qy /= (CT)(sizeX);
-      CT Qline = (Qy-Qz)*inv_h2;
-      for (int ix=0;ix < sizeX;ix++) {
-	int n = ix + (iy + iz*sizeY)*sizeX;
-	int np = ix + ((iy+1)%sizeY + iz*sizeY)*sizeX;
-	EyData[np] = EyData[n] + Qline;
-      }
-      // Vertex
-      for (int ix=0;ix < sizeX;ix++) {
-	int n = ix + (iy + iz*sizeY)*sizeX;
-	int np = (ix+1)%sizeX + (iy + iz*sizeY)*sizeX;
-	CT Qx = rhoData[n];
-	ExData[np] = ExData[n] + (Qx-Qy)*inv_h2;
-      }
-    }
-  }
-}
-
-//
-// Initialize electric field
+// Initialize electric field, from Joerg Rottler code (maxwell.cpp)
+// NOT WORKING CORRECTLY YET
 //
 template <typename AT, typename CT>
 void CpuLES<AT,CT>::initElectricFieldJR() {
@@ -340,7 +186,7 @@ void CpuLES<AT,CT>::initElectricFieldJR() {
   const int size = rho.getSize();
 
   const double hd = boxx/(double)sizeX;
-  const CT fourpi_h = (CT)(4.0*pi*hd);
+  const CT fourpi_h = (CT)(4.0*pi_dbl*hd);
 
   CT* ExData = Ex.getDataPointer();
   CT* EyData = Ey.getDataPointer();
@@ -389,10 +235,10 @@ void CpuLES<AT,CT>::initElectricField() {
   const int size = rho.getSize();
   //const double inv_hd = (double)sizeX/boxx;
   // NOTE: factor 4*pi is included in inv_h2
-  //const CT inv_h2 = (CT)(4.0*pi*inv_hd*inv_hd);
+  //const CT inv_h2 = (CT)(4.0*pi_dbl*inv_hd*inv_hd);
 
   const double hd = boxx/(double)sizeX;
-  const CT fourpi_h = (CT)(4.0*pi*hd);
+  const CT fourpi_h = (CT)(4.0*pi_dbl*hd);
 
   CT* ExData = Ex.getDataPointer();
   CT* EyData = Ey.getDataPointer();
@@ -543,8 +389,6 @@ void CpuLES<AT,CT>::initElectricField() {
     }
   }
 
-  //std::cout << "CpuLES::initElectricField, n_not_set = " << n_not_set << std::endl;
- 
   delete [] ExSet;
   delete [] EySet;
   delete [] EzSet;
@@ -554,8 +398,8 @@ void CpuLES<AT,CT>::initElectricField() {
 // Interpolate force
 //
 template <typename AT, typename CT>
-void CpuLES<AT, CT>::interpolateForceJ(const double sigma1, const double lambdaSigma1, const int numCoord, const xyzq_t<CT> *xyzq,
-				       AT *forceX, AT *forceY, AT *forceZ) {
+void CpuLES<AT, CT>::interpolateForce(const double sigma1, const double lambdaSigma1, const int numCoord, const xyzq_t<CT> *xyzq,
+				      AT *forceX, AT *forceY, AT *forceZ) {
   const int sizeX = rho.getSizeX();
   const int sizeY = rho.getSizeY();
   const int sizeZ = rho.getSizeZ();
@@ -579,10 +423,6 @@ void CpuLES<AT, CT>::interpolateForceJ(const double sigma1, const double lambdaS
   const CT* EyData = Ey.getDataPointer();
   const CT* EzData = Ez.getDataPointer();
 
-  AT EdipX = 0;
-  AT EdipY = 0;
-  AT EdipZ = 0;
-  
   printf("CpuLES::interpolateForceJ, rcut=%lf nx,ny,nz=%d %d %d\n",rcut,nx,ny,nz);
 
   for (int i=0;i < numCoord;i++) {
@@ -611,18 +451,6 @@ void CpuLES<AT, CT>::interpolateForceJ(const double sigma1, const double lambdaS
 	  int mz = ox + (oy + ((oz-1+sizeZ)%sizeZ)*sizeY)*sizeX;
 	  int pz = ox + (oy + ((oz+1)%sizeZ)*sizeY)*sizeX;
 
-	  CT Exm = ExData[mx] + EdipX;
-	  CT Exn = ExData[n] + EdipX;
-	  CT Exp = ExData[px] + EdipX;
-
-	  CT Eym = EyData[my] + EdipY;
-	  CT Eyn = EyData[n] + EdipY;
-	  CT Eyp = EyData[py] + EdipY;
-
-	  CT Ezm = EzData[mz] + EdipZ;
-	  CT Ezn = EzData[n] + EdipZ;
-	  CT Ezp = EzData[pz] + EdipZ;
-
 	  int jn = j0 + (tx+nx) + ((ty+ny) + (tz+nz)*(2*ny+1))*(2*nx+1);
 	  int jmx = j0 + (tx-1+nx) + ((ty+ny) + (tz+nz)*(2*ny+1))*(2*nx+1);
 	  int jpx = j0 + (tx+1+nx) + ((ty+ny) + (tz+nz)*(2*ny+1))*(2*nx+1);
@@ -632,6 +460,18 @@ void CpuLES<AT, CT>::interpolateForceJ(const double sigma1, const double lambdaS
 
 	  int jmz = j0 + (tx+nx) + ((ty+ny) + (tz-1+nz)*(2*ny+1))*(2*nx+1);
 	  int jpz = j0 + (tx+nx) + ((ty+ny) + (tz+1+nz)*(2*ny+1))*(2*nx+1);
+
+	  CT Exm = ExData[mx];
+	  CT Exn = ExData[n];
+	  CT Exp = ExData[px];
+
+	  CT Eym = EyData[my];
+	  CT Eyn = EyData[n];
+	  CT Eyp = EyData[py];
+
+	  CT Ezm = EzData[mz];
+	  CT Ezn = EzData[n];
+	  CT Ezp = EzData[pz];
 
 	  CT Jxm = (tx-1 >= -nx) ? Jx[jmx] : 0;
 	  CT Jxn = Jx[jn];
@@ -648,7 +488,6 @@ void CpuLES<AT, CT>::interpolateForceJ(const double sigma1, const double lambdaS
 	  fx += Jxn*(5.0/6.0*Exn + 1.0/24.0*(Exm + Exp)) + 1.0/24.0*(Jxm + Jxp)*Exn;
 	  fy += Jyn*(5.0/6.0*Eyn + 1.0/24.0*(Eym + Eyp)) + 1.0/24.0*(Jym + Jyp)*Eyn;
 	  fz += Jzn*(5.0/6.0*Ezn + 1.0/24.0*(Ezm + Ezp)) + 1.0/24.0*(Jzm + Jzp)*Ezn;
-
 	}
       }
     }
@@ -660,9 +499,9 @@ void CpuLES<AT, CT>::interpolateForceJ(const double sigma1, const double lambdaS
   // Dipole part
   AT dipSumX, dipSumY, dipSumZ;
   gaussCharge.calcDipoleSum(boxx, boxy, boxz, rho, dipSumX, dipSumY, dipSumZ);
-  EdipX = 4.0*pi/(boxx*boxy*boxz)*dipSumX*ccelec;
-  EdipY = 4.0*pi/(boxx*boxy*boxz)*dipSumY*ccelec;
-  EdipZ = 4.0*pi/(boxx*boxy*boxz)*dipSumZ*ccelec;
+  AT EdipX = 4.0*pi_dbl/(boxx*boxy*boxz)*dipSumX*ccelec;
+  AT EdipY = 4.0*pi_dbl/(boxx*boxy*boxz)*dipSumY*ccelec;
+  AT EdipZ = 4.0*pi_dbl/(boxx*boxy*boxz)*dipSumZ*ccelec;
   printf("Edip: %e %e %e\n",EdipX,EdipY,EdipZ);
   for (int i=0;i < numCoord;i++) {
     CT q = xyzq[i].q;
@@ -670,12 +509,6 @@ void CpuLES<AT, CT>::interpolateForceJ(const double sigma1, const double lambdaS
     forceY[i] += q*EdipY;
     forceZ[i] += q*EdipZ;
   }
-
-  //calcDipoleSum(numCoord, xyzq, dipSumX, dipSumY, dipSumZ);
-  //EdipX = 4.0*pi/(boxx*boxy*boxz)*dipSumX*ccelec;
-  //EdipY = 4.0*pi/(boxx*boxy*boxz)*dipSumY*ccelec;
-  //EdipZ = 4.0*pi/(boxx*boxy*boxz)*dipSumZ*ccelec;
-  //printf("Edip: %e %e %e\n",EdipX,EdipY,EdipZ);
 }
 
 //
@@ -704,7 +537,7 @@ void CpuLES<AT,CT>::chargeFluctuation(const double sigma, const double lambdaSig
   const int ny = (int)ceil(rcut/hyd);
   const int nz = (int)ceil(rcut/hzd);
   const CT sigmasq = sigma*sigma;
-  const CT pref = (CT)pow(2.0*pi*sigmasq,-1.0/2.0);
+  const CT pref = (CT)pow(2.0*pi_dbl*sigmasq,-1.0/2.0);
   assert(hx == hy);
   assert(hx == hz);
   const CT inv_sigma2sq = (CT)(hx*hx/(2.0*sigmasq));
@@ -916,7 +749,7 @@ void CpuLES<AT,CT>::integrate(const CT c, const CT dt, const CT gamma2) {
 	// ijk
 	int n  = ix + (iy + iz*sizeY)*sizeX;
 	CT curlx, curly, curlz;
-	curl(2, ix, iy, iz, sizeX, sizeY, sizeZ, inv_h, ExData, EyData, EzData, curlx, curly, curlz);
+	curl(E_CURL_TYPE, ix, iy, iz, sizeX, sizeY, sizeZ, inv_h, ExData, EyData, EzData, curlx, curly, curlz);
 	BxData[n] = one_min_gamma2_dt*BxData[n] - dt*c*c*curlx;
 	ByData[n] = one_min_gamma2_dt*ByData[n] - dt*c*c*curly;
 	BzData[n] = one_min_gamma2_dt*BzData[n] - dt*c*c*curlz;
@@ -943,7 +776,7 @@ void CpuLES<AT,CT>::integrate(const CT c, const CT dt, const CT gamma2) {
 // Returns curl of D
 // curlType = -1: (D[i]   - D[i-1])/h
 // curlType =  1: (D[i+1] - D[i])/h
-// curlType =  2: ((D[i+1] - D[i])*10 + (D[i] - D[i-1]) + (D[i+2] - D[i+1]))/(12*h)
+// curlType =  2: ( (5/6)*(D[i+1] - D[i]) + (1/24)*(D[i] - D[i-1]) + (1/24)*(D[i+2] - D[i+1]))
 //
 template <typename AT, typename CT>
 CT CpuLES<AT,CT>::curl(const int curlType, const int ix, const int iy, const int iz,
@@ -996,18 +829,15 @@ CT CpuLES<AT,CT>::curl(const int curlType, const int ix, const int iy, const int
     int pk = ix + (iy + ((iz+1)%sizeZ)*sizeY)*sizeX;
     // ijk+2
     int pk2 = ix + (iy + ((iz+2)%sizeZ)*sizeY)*sizeX;
-    valx = inv_h*( (CT)10.0*
-		   (DzData[pj]  - DzData[n] -  (DyData[pk]  - DyData[n])) +
-		   (DzData[n]   - DzData[mj] - (DyData[n]   - DyData[mk])) + 
-		   (DzData[pj2] - DzData[pj] - (DyData[pk2] - DyData[pk]) ) )/(CT)(12.0);
-    valy = inv_h*( (CT)10.0*
-		   (DxData[pk]  - DxData[n] -  (DzData[pi]  - DzData[n])) +
-		   (DxData[n]   - DxData[mk] - (DzData[n]   - DzData[mi])) + 
-		   (DxData[pk2] - DxData[pk] - (DzData[pi2] - DzData[pi]) ) )/(CT)(12.0);
-    valz = inv_h*( (CT)10.0*
-		   (DyData[pi]  - DyData[n] -  (DxData[pj]  - DxData[n])) +
-		   (DyData[n]   - DyData[mi] - (DxData[n]   - DxData[mj])) + 
-		   (DyData[pi2] - DyData[pi] - (DxData[pj2] - DxData[pj]) ) )/(CT)(12.0);
+    valx = inv_h*((CT)(5.0/6.0)*(DzData[pj]  - DzData[n] -  (DyData[pk]  - DyData[n])) +
+		  (CT)(1.0/24.0)*(DzData[n]   - DzData[mj] - (DyData[n]   - DyData[mk])) + 
+		  (CT)(1.0/24.0)*(DzData[pj2] - DzData[pj] - (DyData[pk2] - DyData[pk])));
+    valy = inv_h*((CT)(5.0/6.0)*(DxData[pk]  - DxData[n] -  (DzData[pi]  - DzData[n])) +
+		  (CT)(1.0/24.0)*(DxData[n]   - DxData[mk] - (DzData[n]   - DzData[mi])) + 
+		  (CT)(1.0/24.0)*(DxData[pk2] - DxData[pk] - (DzData[pi2] - DzData[pi])));
+    valz = inv_h*((CT)(5.0/6.0)*(DyData[pi]  - DyData[n] -  (DxData[pj]  - DxData[n])) +
+		  (CT)(1.0/24.0)*(DyData[n]   - DyData[mi] - (DxData[n]   - DxData[mj])) + 
+		  (CT)(1.0/24.0)*(DyData[pi2] - DyData[pi] - (DxData[pj2] - DxData[pj])));
   }
 }
 
@@ -1059,7 +889,7 @@ CT CpuLES<AT,CT>::maxCurlB() {
 //
 template <typename AT, typename CT>
 CT CpuLES<AT,CT>::maxCurlE() {
-  return maxCurl(2, Ex, Ey, Ez);
+  return maxCurl(E_CURL_TYPE, Ex, Ey, Ez);
 }
 
 //
@@ -1071,42 +901,8 @@ double CpuLES<AT,CT>::calcDipoleEnergy(const int numCoord, const xyzq_t<CT>* xyz
   AT dipSumX, dipSumY, dipSumZ;
   gaussCharge.calcDipoleSum(boxx, boxy, boxz, rho, dipSumX, dipSumY, dipSumZ);
   printf("dipSum = %lf %lf %lf\n",dipSumX, dipSumY, dipSumZ);
-  return 2.0*pi/(boxx*boxy*boxz)*(dipSumX*dipSumX + dipSumY*dipSumY + dipSumZ*dipSumZ)*ccelec;
+  return 2.0*pi_dbl/(boxx*boxy*boxz)*(dipSumX*dipSumX + dipSumY*dipSumY + dipSumZ*dipSumZ)*ccelec;
 }
-
-/*
-//
-// Save electric field in file
-//
-template <typename AT, typename CT>
-void CpuLES<AT,CT>::saveElectricField(const char* filename) {
-  std::ofstream file(filename);
-  if (file.is_open()) {
-    for (int i=0;i < nx*sizeY*nz;i++) {
-      file << Ex[i] << " " << Ey[i] << " " << Ez[i] << std::endl;
-    }
-  } else {
-    std::cerr<<"Error opening file "<<filename<<std::endl;
-    exit(1);
-  }
-}
-
-//
-// Save charge in file
-//
-template <typename AT, typename CT>
-void CpuLES<AT,CT>::saveCharge(const char* filename) {
-  std::ofstream file(filename);
-  if (file.is_open()) {
-    for (int i=0;i < nx*ny*nz;i++) {
-      file << rho[i] << std::endl;
-    }
-  } else {
-    std::cerr<<"Error opening file "<<filename<<std::endl;
-    exit(1);
-  }
-}
-*/
 
 //
 // Explicit instances of this class

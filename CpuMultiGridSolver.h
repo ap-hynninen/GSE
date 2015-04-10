@@ -51,7 +51,8 @@ public:
 	   const double boxx, const double boxy, const double boxz);
 
   void calculateResidual(const CpuGrid<T>& phi, const CpuGrid<T>& rho, CpuGrid<T>& res,
-			 const double boxx, const double boxy, const double boxz);
+			 const double boxx, const double boxy, const double boxz,
+			 const int laplaceRep);
 
   void buildLaplace(const CpuGrid<T>& phi, T* L, const double boxx, const double boxy, const double boxz);
   

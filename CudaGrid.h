@@ -5,7 +5,7 @@
 // (c) Antti-Pekka Hynninen Feb 2015
 // aphynninen@hotmail.com
 //
-#include "cuda_utils.h"
+#include "cuda/cuda_utils.h"
 #include "Grid.h"
 
 // Forward declaration of CpuGrid

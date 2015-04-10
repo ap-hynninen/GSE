@@ -53,7 +53,7 @@ void CpuGSEu<AT, CT>::solvePoisson() {
     //printf("sigmaj = %lf\n",sigmaj);
     this->gaussCharge.spreadChargeOnGrid(sigmaj, this->lambdaSigma1*sqrt(2.0)*sigmaj,
 					 this->boxx, this->boxy, this->boxz, this->rhoS, *rhoG.at(j));
-    double fac = pow(2*pi*sigmaj*sigmaj,3.0/2.0)/pow(sigmaj*sigmaj,1.0/2.0);
+    double fac = pow(2*pi_dbl*sigmaj*sigmaj,3.0/2.0)/pow(sigmaj*sigmaj,1.0/2.0);
     rhoG.at(j)->scale(fac);
   }
   // Combine convolutions to a single grid

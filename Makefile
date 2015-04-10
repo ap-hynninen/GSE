@@ -72,17 +72,22 @@ endif
 endif  # MPI_FOUND
 
 # NOTE: CUDA texture objects require Kepler GPU + CUDA 5.0
-DEFS += -D USE_TEXTURE_OBJECTS
+ifeq ($(CUDA_COMPILER), $(YES))
+DEFS += -D USE_TEXTURE_OBJECTS -D CUDA_ON
+endif
 
 OBJS_GSE = cpu_gse.o CpuGSE.o CpuGSEr.o CpuGSEk.o CpuMultiGridSolver.o \
            CpuFFTSolver.o CpuEwaldRecip.o CpuGaussCharge.o CpuGreensFuncGSE.o \
-	   CpuGreensFuncG2.o CpuLES.o CpuGSEu.o
+	   CpuLES.o
+ifeq ($(CUDA_COMPILER), $(YES))
+OBJS_GSE += gpu_gse.o cuda/CudaEnergyVirial.o cuda/EnergyVirial.o cuda/Matrix3d.o cuda/reduce.o \
+	    cuda/CudaPMERecip.o cuda/XYZQ.o cuda/Force.o cuda/cuda_utils.o
+endif
 
 OBJS_GPU_CONV = gpu_conv.o cuda_utils.o CudaConvolution.o CpuConvolution.o
 
-ifeq ($(MPI_FOUND), $(YES))
 OBJS = $(OBJS_GSE)
-endif
+
 ifeq ($(CUDA_COMPILER), $(YES))
 OBJS += $(OBJS_GPU_CONV)
 endif
@@ -122,12 +127,12 @@ endif
 # CUDA_CFLAGS = flags for compiling CUDA API calls using c compiler
 # NVCC_CFLAGS = flags for nvcc compiler
 # CUDA_LFLAGS = flags for linking with CUDA
-
+CUDA_CFLAGS =
+CUDA_LFLAGS =
+NVCC_CFLAGS =
+ifeq ($(CUDA_COMPILER), $(YES))
 CUDA_CFLAGS = -I${CUDAROOT}/include $(OPTLEV) $(OPENMP_OPT) -std=c++0x
 NVCC_CFLAGS = $(OPTLEV) -lineinfo -fmad=true -use_fast_math $(GENCODE_FLAGS)
-MPI_CFLAGS = -I${MPIROOT}/include
-FFTW_CFLAGS = -I${FFTWROOT}/include
-
 ifeq ($(OS),linux)
 CUDA_LFLAGS = -L$(CUDAROOT)/lib64
 else
@@ -138,20 +143,29 @@ CUDA_LFLAGS = -L$(CUDAROOT)/lib
 endif
 endif
 CUDA_LFLAGS += -lcudart -lcufft -lnvToolsExt
+endif
 
-FFTW_LFLAGS = -L$(FFTWROOT)/lib -lfftw3 -lfftw3f
-
+MPI_CFLAGS =
 ifeq ($(MPI_FOUND), $(YES))
+MPI_CFLAGS = -I${MPIROOT}/include
+endif
+
+FFTW_CFLAGS =
+FFTW_LFLAGS =
+ifeq ($(FFTW_FOUND), $(YES))
+FFTW_CFLAGS = -I${FFTWROOT}/include
+FFTW_LFLAGS = -L$(FFTWROOT)/lib -lfftw3 -lfftw3f
+endif
+
 BINARIES = cpu_gse
-endif
-ifeq ($(CUDA_COMPILER), $(YES))
-BINARIES += gpu_conv
-endif
+#ifeq ($(CUDA_COMPILER), $(YES))
+#BINARIES += gpu_conv
+#endif
 
 all: $(BINARIES)
 
 cpu_gse : $(OBJS_GSE)
-	$(CL) $(OPENMP_OPT) $(FFTW_LFLAGS) -o cpu_gse $(OBJS_GSE)
+	$(CL) $(OPENMP_OPT) $(CUDA_LFLAGS) $(FFTW_LFLAGS) -o cpu_gse $(OBJS_GSE)
 
 gpu_conv : $(OBJS_GPU_CONV)
 	$(CL) $(OPENMP_OPT) $(CUDA_LFLAGS) -o gpu_conv $(OBJS_GPU_CONV)
@@ -161,13 +175,24 @@ clean:
 	rm -f *.d
 	rm -f *~
 	rm -f $(BINARIES)
+	rm -f cuda/*.o
+	rm -f cuda/*.d
+	rm -f cuda/*~
 
 # Pull in dependencies that already exist
 -include $(OBJS:.o=.d)
 
+cuda/%.o : cuda/%.cu
+	cd cuda && nvcc -c $(MPI_CFLAGS) $(NVCC_CFLAGS) $(FFTW_CFLAGS) $(DEFS) $*.cu
+	cd cuda && nvcc -M $(MPI_CFLAGS) $(NVCC_CFLAGS) $(FFTW_CFLAGS) $(DEFS) $*.cu > $*.d
+
+cuda/%.o : cuda/%.cpp
+	cd cuda && $(CC) -c $(CUDA_CFLAGS) $(FFTW_CFLAGS) $(DEFS) $*.cpp
+	cd cuda && $(CC) -MM $(CUDA_CFLAGS) $(FFTW_CFLAGS) $(DEFS) $*.cpp > $*.d
+
 %.o : %.cu
-	nvcc -c $(MPI_CFLAGS) $(NVCC_CFLAGS) $(DEFS) $<
-	nvcc -M $(MPI_CFLAGS) $(NVCC_CFLAGS) $(DEFS) $*.cu > $*.d
+	nvcc -c $(MPI_CFLAGS) $(NVCC_CFLAGS) $(FFTW_CFLAGS) $(DEFS) $<
+	nvcc -M $(MPI_CFLAGS) $(NVCC_CFLAGS) $(FFTW_CFLAGS) $(DEFS) $*.cu > $*.d
 
 %.o : %.cpp
 	$(CC) -c $(CUDA_CFLAGS) $(FFTW_CFLAGS) $(DEFS) $<
