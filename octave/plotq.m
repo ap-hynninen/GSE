@@ -1,0 +1,12 @@
+clear;
+qx=2*pi*(1:60)/100;
+qy=qx;
+qz=qx;
+q2=qx.^2 + qy.^2 + qz.^2;
+plot(sqrt(q2),G2(qx,qy,qz)-1./q2,'g');
+hold on;
+plot(sqrt(q2),abs(G6(qx,qy,qz)-1./q2),'r');
+plot(sqrt(q2),abs(G7(qx,qy,qz)-1./q2),'k');
+%plot(sqrt(q2),1./Ginv(qx,qy,qz)-1./q2,'r');
+%plot(sqrt(q2),abs(phi(qx,qy,qz)-1./q2),'r');
+hold off;

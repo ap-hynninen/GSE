@@ -1,5 +1,8 @@
 function [y] = G3(qx, qy, qz);
 
-    y = 1./(4*sin(qx)./(5/6+1/6*cos(qx)) + 4*sin(qy)./(5/6+1/6*cos(qy)) ...
-            + 4*sin(qz)./(5/6+1/6*cos(qz)));
+    a = 5/6;
+    b = 1;
+    y = (1/2)*(b+(1-b)/3*cos(qx)+(1-b)/3*cos(qy)+(1-b)/3*cos(qz)).* ...
+        (a+(1-a)/3*(cos(qx)+cos(qy)+cos(qz)))./(3-(cos(qx)+cos(qy)+cos(qz)));
+
 end

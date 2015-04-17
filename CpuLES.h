@@ -52,9 +52,20 @@ class CpuLES {
   CT* Jy;
   int JzLen;
   CT* Jz;
-  
+
+  CpuGrid<CT> ExG;
+  CpuGrid<CT> EyG;
+  CpuGrid<CT> EzG;
+
   void calcDipoleSum(const int numCoord, const xyzq_t<CT> *xyzq,
 		     AT& dipSumX, AT& dipSumY, AT& dipSumZ);
+  CT div(const int divType, const int ix, const int iy, const int iz,
+	 const CT inv_h,
+	 const CpuGrid<CT>& Dx, const CpuGrid<CT>& Dy, const CpuGrid<CT>& Dz);
+  void curl(const int curlType, const int ix, const int iy, const int iz,
+	    const CT inv_h,
+	    const CpuGrid<CT>& Dx, const CpuGrid<CT>& Dy, const CpuGrid<CT>& Dz,
+	    CT& curlx, CT& curly, CT& curlz);
 
  public:
   CpuLES(const int sizeX, const int sizeY, const int sizeZ, const double sigma,
@@ -63,8 +74,12 @@ class CpuLES {
   ~CpuLES();
 
   double calcTotalEnergy();
+  double calcTotalEnergy(const double sigma1, const double lambdaSigma1);
+  double calcTotalMagneticEnergy();
   void interpolateForce(const double sigma1, const double lambdaSigma1, const int numCoord, const xyzq_t<CT> *xyzq,
 			AT *forceX, AT *forceY, AT *forceZ);
+  void interpolateForce2(const double sigma1, const double lambdaSigma1, const int numCoord, const xyzq_t<CT> *xyzq,
+			 AT *forceX, AT *forceY, AT *forceZ);
   void spreadCharge1(const double sigma1, const double lambdaSigma1, const int numCoord, const xyzq_t<CT> *xyzq);
   void spreadCharge2(const double sigma2, const double lambdaSigma1);
   void initElectricFieldJR();
@@ -72,15 +87,10 @@ class CpuLES {
   double checkGaussLaw();
   void chargeFluctuation(const double sigma, const double lambdaSigma,
 			 const int numCoord, const xyzq_t<CT> *xyzq_p, const xyzq_t<CT> *xyzq_c);
-  void integrate(const CT c, const CT dt, const CT gamma2);
+  void integrate(const CT c, const CT dt, const CT gamma2, const double T);
   void clearMagneticField();
   void setElectricField(const CpuGrid<CT>& ExIn, const CpuGrid<CT>& EyIn, const CpuGrid<CT>& EzIn);
 
-  CT curl(const int curlType, const int ix, const int iy, const int iz,
-	  const int sizeX, const int sizeY, const int sizeZ,
-	  const CT inv_h,
-	  const CT* DxData, const CT* DyData, const CT* DzData,
-	  CT& valx, CT& valy, CT& valz);
   CT maxCurl(const int curlType, const CpuGrid<CT>& Dx, const CpuGrid<CT>& Dy, const CpuGrid<CT>& Dz);
   CT maxCurlB();
   CT maxCurlE();

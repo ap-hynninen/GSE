@@ -98,7 +98,7 @@ int main(int argc, char *argv[]) {
   start_gpu(1, 0, devices);
 #endif
   
-  //testRandom(100, L, M, sigma, order, seed);
+  //testRandom(800, L, M, sigma, order, seed);
   testPair(r, L, M, sigma);
   //test48K();
 
@@ -166,6 +166,19 @@ void saveForce(const char *filename, const int numCoord, const T* forceX, const 
 }
 
 template<typename T>
+void readForce(const char *filename, const int numCoord, T* forceX, T* forceY, T* forceZ) {
+  std::ifstream file(filename);
+  if (file.is_open()) {
+    for (int i=0;i < numCoord;i++) {
+      file >> forceX[i] >> forceY[i] >> forceZ[i];
+    }
+  } else {
+    std::cerr<<"Error opening file "<<filename<<std::endl;
+    exit(1);
+  }
+}
+
+template<typename T>
 void saveMatrix(const char* filename,const T* L, const int sizeX, const int sizeY) {
   std::ofstream file(filename);
   if (file.is_open()) {
@@ -186,7 +199,7 @@ void saveMatrix(const char* filename,const T* L, const int sizeX, const int size
 //#######################################################################################
 void test48K() {
   const int numCoord = 48191;
-  const double sigma = 2.1213;
+  const double sigma = 2.12132034355964;
   const double kappa = 0.4;
   const double lambdaSigma = 3.0;
   const double lambdaSigma1 = 3.0;
@@ -194,6 +207,7 @@ void test48K() {
   const double boxy = 80.0;
   const double boxz = 80.0;
   const int ngrid = 80;
+  const int order = 4;
   
   xyzq_t<double>* xyzq = new xyzq_t<double>[numCoord];
   loadArray<double>(4, numCoord, "data/xyzq_48k.txt", (double *)xyzq);
@@ -224,7 +238,7 @@ void test48K() {
   std::cout << "energy_GSEu = " << energy_GSEu << std::endl;
 #endif
 
-#define USE_LES
+  //#define USE_LES
 #ifdef USE_LES
   //--------------------------------------------------------------------------------------------------------
   // LES
@@ -238,8 +252,8 @@ void test48K() {
   cpuLES.initElectricField();
   double err = cpuLES.checkGaussLaw();
   printf("Error in Gauss Law = %e\n",err);
-  for (int i=0;i < 4000;i++) {
-    cpuLES.integrate(2.0, 0.1, 1.0);
+  for (int i=0;i < 20000;i++) {
+    cpuLES.integrate(2.0, 0.1, 1.0, 0.0);
   }
   double energy_LES = cpuLES.calcTotalEnergy();
   double energy_dip = cpuLES.calcDipoleEnergy(numCoord, xyzq);
@@ -254,22 +268,48 @@ void test48K() {
   saveForce<double>("forceLES.txt", numCoord, forceXLES, forceYLES, forceZLES);
 #endif
 
+#ifdef CUDA_ON
+  //#define USE_SPME
+#ifdef USE_SPME
+  //--------------------------------------------------------------------------------------------------------
+  // SPME
+  //--------------------------------------------------------------------------------------------------------
+  double* forceXSPME = new double[numCoord];
+  double* forceYSPME = new double[numCoord];
+  double* forceZSPME = new double[numCoord];
+  double energy_SPME;
+  testRandom_gpu(numCoord, boxx, ngrid, sigma, order, xyzq, energy_SPME, forceXSPME, forceYSPME, forceZSPME);
+  saveForce<double>("forceSPME.txt", numCoord, forceXSPME, forceYSPME, forceZSPME);
+#endif
+#endif
+
   //--------------------------------------------------------------------------------------------------------  
   // Ewald
   //--------------------------------------------------------------------------------------------------------
   double* forceXew = new double[numCoord];
   double* forceYew = new double[numCoord];
   double* forceZew = new double[numCoord];
-  CpuEwaldRecip cpuEwald(sigma, 24, boxx, boxy, boxz);
-  double energy_ew = cpuEwald.calcForceEnergy(numCoord, xyzq, forceXew, forceYew, forceZew);
-  std::cout << "energy_ew = " << energy_ew << std::endl;
+  double energy_ew;
+  //#define CALC_EWALD
+#ifdef CALC_EWALD
+  CpuEwaldRecip cpuEwald(sigma, 64, boxx, boxy, boxz);
+  energy_ew = cpuEwald.calcForceEnergy(numCoord, xyzq, forceXew, forceYew, forceZew);
   saveForce<double>("forceEW.txt",numCoord, forceXew, forceYew, forceZew);
-
+#else
+  energy_ew = 1733.61;
+  readForce<double>("forceEW64.txt",numCoord, forceXew, forceYew, forceZew);
+#endif
+  std::cout << "energy_ew = " << energy_ew << std::endl;
+  
   printf("rms(GSEk) = %e %e\n",Erms(numCoord, forceXew, forceYew, forceZew, forceXGSEk, forceYGSEk, forceZGSEk),
 	 fabs((energy_ew-energy_GSEk)/energy_ew));
 #ifdef USE_LES
   printf("rms(LES) = %e %e\n",Erms(numCoord, forceXew, forceYew, forceZew, forceXLES, forceYLES, forceZLES),
 	 fabs((energy_ew-energy_LES)/energy_ew));
+#endif
+#ifdef USE_SPME
+  printf("rms(SPME%d) = %e %e\n",order,Erms(numCoord, forceXew, forceYew, forceZew, forceXSPME, forceYSPME, forceZSPME),
+	 fabs((energy_ew-energy_SPME)/energy_ew));
 #endif
   
   delete [] xyzq;
@@ -327,7 +367,26 @@ void testRandom(const int numCoord, const double L, const int ngrid, const doubl
   cpuGSEk.interpolateForce(numCoord, xyzq, forceXGSEk, forceYGSEk, forceZGSEk);
   saveForce<double>("forceGSEk.txt", numCoord, forceXGSEk, forceYGSEk, forceZGSEk);
 #endif
-  
+
+#define USE_GSE_R
+#ifdef USE_GSE_R
+  //--------------------------------------------------------------------------------------------------------
+  // GSE-r
+  //--------------------------------------------------------------------------------------------------------
+  double* forceXGSEr = new double[numCoord];
+  double* forceYGSEr = new double[numCoord];
+  double* forceZGSEr = new double[numCoord];
+  CpuGSEr<double,double> cpuGSEr(ngrid, ngrid, ngrid, sigma, kappa, lambdaSigma, lambdaSigma1, boxx, boxy, boxz);
+  cpuGSEr.printInfo();
+  cpuGSEr.spreadCharge1(numCoord, xyzq);
+  cpuGSEr.spreadCharge2();
+  cpuGSEr.solvePoisson();
+  double energy_GSEr = cpuGSEr.calculateEnergy();
+  std::cout << "energy_GSEr = " << energy_GSEr << std::endl;
+  cpuGSEr.interpolateForce(numCoord, xyzq, forceXGSEr, forceYGSEr, forceZGSEr);
+  saveForce<double>("forceGSEr.txt", numCoord, forceXGSEr, forceYGSEr, forceZGSEr);
+#endif
+
 #ifdef USE_GSE_U
   //--------------------------------------------------------------------------------------------------------
   // GSE-u
@@ -339,7 +398,7 @@ void testRandom(const int numCoord, const double L, const int ngrid, const doubl
   std::cout << "energy_GSEu = " << energy_GSEu << std::endl;
 #endif
   
-#define USE_LES
+  //#define USE_LES
 #ifdef USE_LES
   //--------------------------------------------------------------------------------------------------------
   // LES
@@ -348,19 +407,29 @@ void testRandom(const int numCoord, const double L, const int ngrid, const doubl
   double* forceYLES = new double[numCoord];
   double* forceZLES = new double[numCoord];
   CpuLES<double,double> cpuLES(ngrid, ngrid, ngrid, sigma, boxx, boxy, boxz);
-
+    //#define USE_ONGRID_SPREAD
+#ifdef USE_ONGRID_SPREAD
+  double sigmaA = cpuGSEk.getSigma1();
+  double sigmaB = cpuGSEk.getSigma2()/sqrt(2.0);
+  cpuLES.spreadCharge1(sigmaA, 3.0, numCoord, xyzq);
+#else
+  cpuLES.spreadCharge1(sigma/sqrt(2.0), 3.0, numCoord, xyzq);
+#endif
   //cpuLES.spreadCharge1(cpuGSEk.getSigma1(), cpuGSEk.getLambdaSigma1(), 2, xyzq);
   //cpuLES.spreadCharge2(cpuGSEk.getSigma2(), cpuGSEk.getLambdaSigma1());
-  cpuLES.spreadCharge1(sigma/sqrt(2.0), lambdaSigma, numCoord, xyzq);
   
   cpuLES.clearMagneticField();
-  cpuLES.initElectricField();
+  cpuLES.initElectricFieldJR();
   double err = cpuLES.checkGaussLaw();
   printf("Error in Gauss Law = %e\n",err);
   for (int i=0;i < 10000;i++) {
-    cpuLES.integrate(2.0, 0.1, 1.0);
+    cpuLES.integrate(2.0, 0.1, 1.0, 0.0);
   }
+#ifdef USE_ONGRID_SPREAD
+  double energy_LES = cpuLES.calcTotalEnergy(sigmaB, 3.0);
+#else
   double energy_LES = cpuLES.calcTotalEnergy();
+#endif
   double energy_dip = cpuLES.calcDipoleEnergy(numCoord, xyzq);
   std::cout << "energy_LES = " << energy_LES-energy_dip  << " (" << energy_LES << " , " << energy_dip << ")" << std::endl;
   err = cpuLES.checkGaussLaw();
@@ -368,9 +437,14 @@ void testRandom(const int numCoord, const double L, const int ngrid, const doubl
   printf("max(curlB) = %e\n",cpuLES.maxCurlB());
   printf("max(curlE) = %e\n",cpuLES.maxCurlE());
 
-  cpuLES.chargeFluctuation(sigma/sqrt(2.0), lambdaSigma, numCoord, xyzq, xyzq);
-  cpuLES.interpolateForce(sigma/sqrt(2.0), lambdaSigma, numCoord, xyzq, forceXLES, forceYLES, forceZLES);
-
+#ifdef USE_ONGRID_SPREAD
+  cpuLES.chargeFluctuation(sqrt(sigmaA*sigmaA + sigmaB*sigmaB), 3.0, numCoord, xyzq, xyzq);
+  cpuLES.interpolateForce2(sqrt(sigmaA*sigmaA + sigmaB*sigmaB), 3.0, numCoord, xyzq, forceXLES, forceYLES, forceZLES);
+#else
+  cpuLES.chargeFluctuation(sigma/sqrt(2.0), 3.0, numCoord, xyzq, xyzq);
+  cpuLES.interpolateForce(sigma/sqrt(2.0), 3.0, numCoord, xyzq, forceXLES, forceYLES, forceZLES);
+#endif
+  
   saveForce<double>("forceLES.txt", numCoord, forceXLES, forceYLES, forceZLES);
 #endif
 
@@ -401,11 +475,15 @@ void testRandom(const int numCoord, const double L, const int ngrid, const doubl
   saveForce<double>("forceEW.txt", numCoord, forceXew, forceYew, forceZew);
 #ifdef USE_LES
   printf("rms(LES)  = %e %e\n",Erms(numCoord, forceXew, forceYew, forceZew, forceXLES, forceYLES, forceZLES),
-	 fabs((energy_ew-energy_LES)/energy_ew));
+	 fabs((energy_ew-(energy_LES-energy_dip))/energy_ew));
 #endif
 #ifdef USE_GSE_K
   printf("rms(GSEk) = %e %e\n",Erms(numCoord, forceXew, forceYew, forceZew, forceXGSEk, forceYGSEk, forceZGSEk),
 	 fabs((energy_ew-energy_GSEk)/energy_ew));
+#endif
+#ifdef USE_GSE_R
+  printf("rms(GSEr) = %e %e\n",Erms(numCoord, forceXew, forceYew, forceZew, forceXGSEr, forceYGSEr, forceZGSEr),
+	 fabs((energy_ew-energy_GSEr)/energy_ew));
 #endif
 #ifdef USE_SPME
   printf("rms(SPME) = %e %e\n",Erms(numCoord, forceXew, forceYew, forceZew, forceXSPME, forceYSPME, forceZSPME),
@@ -428,6 +506,12 @@ void testRandom(const int numCoord, const double L, const int ngrid, const doubl
   delete [] forceXGSEk;
   delete [] forceYGSEk;
   delete [] forceZGSEk;
+#endif
+
+#ifdef USE_GSE_R
+  delete [] forceXGSEr;
+  delete [] forceYGSEr;
+  delete [] forceZGSEr;
 #endif
 
 #ifdef USE_LES
@@ -459,7 +543,7 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
   xyzq[1].x = r/2.0 + 0.5*boxx;
   xyzq[1].y = 0.5*boxy;
   xyzq[1].z = 0.5*boxz;
-  
+
   /*
   xyzq[0].x = 0.5*boxx;
   xyzq[0].y = -r/2.0 + 0.5*boxy;
@@ -477,7 +561,7 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
   xyzq[1].y = 0.5*boxy;
   xyzq[1].z = r/2.0 + 0.5*boxz;
   */
-
+  
   /*
   double a = r/(2.0*sqrt(3.0));
   xyzq[0].x = -a + 0.5*L;
@@ -593,31 +677,51 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
   // LES
   //--------------------------------------------------------------------------------------------------------  
   CpuLES<double,double> cpuLES(ngrid, ngrid, ngrid, sigma, boxx, boxy, boxz);
-  //cpuLES.spreadCharge1(cpuGSEk.getSigma1(), cpuGSEk.getLambdaSigma1(), 2, xyzq);
-  //cpuLES.spreadCharge2(cpuGSEk.getSigma2(), cpuGSEk.getLambdaSigma1());
+  //#define USE_ONGRID_SPREAD
+#ifdef USE_ONGRID_SPREAD
+  double sigmaA = cpuGSEk.getSigma1();
+  double sigmaB = cpuGSEk.getSigma2()/sqrt(2.0);
+  cpuLES.spreadCharge1(sigmaA, 3.0, 2, xyzq);
+#else
   cpuLES.spreadCharge1(sigma/sqrt(2.0), 3.0, 2, xyzq);
+#endif
 #ifdef TEST_CHARGE_SPREAD
   res.copy(cpuLES.getRho());
   res.sub(rhoS_ref);
   printf("RE|rhoS_LES - rhoS_ref| = %e\n",res.maxAbsValue()/rhoS_ref_max);
 #endif
   cpuLES.clearMagneticField();
-  cpuLES.initElectricField();
+  cpuLES.initElectricFieldJR();
   double err = cpuLES.checkGaussLaw();
   printf("Error in Gauss Law = %e\n",err);
-  for (int i=0;i < 1000;i++) {
-    cpuLES.integrate(2.0, 0.1, 1.0);
+  for (int i=0;i < 10000;i++) {
+      cpuLES.integrate(2.0, 0.1, 1.0, 0.0);
+      //printf("Gauss, curlE, curlB = %e %e %e\n",cpuLES.checkGaussLaw(),cpuLES.maxCurlE(),cpuLES.maxCurlB());
   }
+#ifdef USE_ONGRID_SPREAD
+  double energy_LES = cpuLES.calcTotalEnergy(sigmaB, 3.0);
+#else
   double energy_LES = cpuLES.calcTotalEnergy();
+#endif
   double energy_dip = cpuLES.calcDipoleEnergy(2, xyzq);
   std::cout << "energy_LES = " << energy_LES-energy_dip  << " (" << energy_LES << " , " << energy_dip << ")" << std::endl;
+  printf("%18.14lf %18.14lf\n",energy_LES,energy_dip);
   err = cpuLES.checkGaussLaw();
   printf("Error in Gauss Law = %e\n",err);
   printf("max(curlB) = %e\n",cpuLES.maxCurlB());
   printf("max(curlE) = %e\n",cpuLES.maxCurlE());
- 
+
+  cpuLES.getEx().save("ExLES.txt");
+  cpuLES.getEy().save("EyLES.txt");
+  cpuLES.getEz().save("EzLES.txt");
+
+#ifdef USE_ONGRID_SPREAD
+  cpuLES.chargeFluctuation(sqrt(sigmaA*sigmaA + sigmaB*sigmaB), 3.0, 2, xyzq, xyzq);
+  cpuLES.interpolateForce2(sqrt(sigmaA*sigmaA + sigmaB*sigmaB), 3.0, 2, xyzq, forceX, forceY, forceZ);
+#else
   cpuLES.chargeFluctuation(sigma/sqrt(2.0), 3.0, 2, xyzq, xyzq);
   cpuLES.interpolateForce(sigma/sqrt(2.0), 3.0, 2, xyzq, forceX, forceY, forceZ);
+#endif
   printf("LES(J): %lf %lf %lf | %lf %lf %lf\n",forceX[0],forceY[0],forceZ[0],forceX[1],forceY[1],forceZ[1]);
 
 #ifdef USE_GSE_R
@@ -632,7 +736,7 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
   // Ewald
   //--------------------------------------------------------------------------------------------------------
   double refX[2], refY[2], refZ[2];
-  CpuEwaldRecip cpuEwald(sigma, 12*ngrid/boxx, boxx, boxy, boxz);
+  CpuEwaldRecip cpuEwald(sigma, 24*ngrid/boxx, boxx, boxy, boxz);
   double energy_ew = cpuEwald.calcForceEnergy(2, xyzq, refX, refY, refZ);
   std::cout << "energy_ew = " << energy_ew << std::endl;
   printf("EWALD: %lf %lf %lf | %lf %lf %lf\n",refX[0],refY[0],refZ[0],refX[1],refY[1],refZ[1]);
