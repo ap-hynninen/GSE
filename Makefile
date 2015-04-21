@@ -134,7 +134,7 @@ CUDA_CFLAGS =
 CUDA_LFLAGS =
 NVCC_CFLAGS =
 ifeq ($(CUDA_COMPILER), $(YES))
-CUDA_CFLAGS = -I${CUDAROOT}/include $(OPTLEV) $(OPENMP_OPT) -std=c++0x
+CUDA_CFLAGS = -I${CUDAROOT}/include $(OPTLEV) $(OPENMP_OPT) #-std=c++0x
 NVCC_CFLAGS = $(OPTLEV) -lineinfo -fmad=true -use_fast_math $(GENCODE_FLAGS)
 ifeq ($(OS),linux)
 CUDA_LFLAGS = -L$(CUDAROOT)/lib64
