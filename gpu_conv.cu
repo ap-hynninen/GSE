@@ -13,6 +13,7 @@ template<typename T>
 void test(const int n, const int kernelRadius);
 
 int main() {
+    
   std::vector<int> devices;
   start_gpu(1, 0, devices);
 

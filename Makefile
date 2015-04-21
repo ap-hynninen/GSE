@@ -85,7 +85,9 @@ OBJS_GSE += gpu_gse.o cuda/CudaEnergyVirial.o cuda/EnergyVirial.o cuda/Matrix3d.
 	    cuda/CudaPMERecip.o cuda/XYZQ.o cuda/Force.o cuda/cuda_utils.o
 endif
 
-OBJS_GPU_CONV = gpu_conv.o cuda_utils.o CudaConvolution.o CpuConvolution.o
+OBJS_GPU_CONV = gpu_conv.o cuda/cuda_utils.o CudaConvolution.o CpuConvolution.o
+
+OBJS_GPU_GAUSS = gpu_gauss.o cuda/cuda_utils.o CudaGaussCharge.o CpuGaussCharge.o
 
 OBJS = $(OBJS_GSE)
 
@@ -159,9 +161,10 @@ FFTW_LFLAGS = -L$(FFTWROOT)/lib -lfftw3 -lfftw3f
 endif
 
 BINARIES = cpu_gse
-#ifeq ($(CUDA_COMPILER), $(YES))
-#BINARIES += gpu_conv
-#endif
+ifeq ($(CUDA_COMPILER), $(YES))
+BINARIES += gpu_conv
+BINARIES += gpu_gauss
+endif
 
 all: $(BINARIES)
 
@@ -170,6 +173,9 @@ cpu_gse : $(OBJS_GSE)
 
 gpu_conv : $(OBJS_GPU_CONV)
 	$(CL) $(OPENMP_OPT) $(CUDA_LFLAGS) -o gpu_conv $(OBJS_GPU_CONV)
+
+gpu_gauss : $(OBJS_GPU_GAUSS)
+	$(CL) $(OPENMP_OPT) $(CUDA_LFLAGS) -o gpu_gauss $(OBJS_GPU_GAUSS)
 
 clean: 
 	rm -f *.o

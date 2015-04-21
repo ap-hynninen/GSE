@@ -32,14 +32,16 @@ public:
     for (int i=0;i < this->size;i++) this->data[i] += gridData[i];
   }
 
-  void sub(const Grid<T>& grid) {
-    const T* gridData = grid.getDataPointer();
-    for (int i=0;i < this->size;i++) this->data[i] -= gridData[i];
+  template <typename T2>
+  void sub(const Grid<T2>& grid) {
+    const T2* gridData = grid.getDataPointer();
+    for (int i=0;i < this->size;i++) this->data[i] -= (T)gridData[i];
   }
 
-  void copy(const CpuGrid<T>& grid) {
-    const T* gridData = grid.getDataPointer();
-    for (int i=0;i < this->size;i++) this->data[i] = gridData[i];
+  template <typename T2>
+  void copy(const CpuGrid<T2>& grid) {
+    const T2* gridData = grid.getDataPointer();
+    for (int i=0;i < this->size;i++) this->data[i] = (T)gridData[i];
   }
   
   void copy(const CudaGrid<T>& d_grid) {

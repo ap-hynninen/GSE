@@ -531,19 +531,22 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
   const double boxx = L;
   const double boxy = L;
   const double boxz = L;
+  const int order = 4;
   
   xyzq_t<double> xyzq[2];
   double forceX[2];
   double forceY[2];
   double forceZ[2];
 
+  /*
   xyzq[0].x = -r/2.0 + 0.5*boxx;
   xyzq[0].y = 0.5*boxy;
   xyzq[0].z = 0.5*boxz;
   xyzq[1].x = r/2.0 + 0.5*boxx;
   xyzq[1].y = 0.5*boxy;
   xyzq[1].z = 0.5*boxz;
-
+  */
+  
   /*
   xyzq[0].x = 0.5*boxx;
   xyzq[0].y = -r/2.0 + 0.5*boxy;
@@ -561,8 +564,7 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
   xyzq[1].y = 0.5*boxy;
   xyzq[1].z = r/2.0 + 0.5*boxz;
   */
-  
-  /*
+
   double a = r/(2.0*sqrt(3.0));
   xyzq[0].x = -a + 0.5*L;
   xyzq[0].y = -a + 0.5*L;
@@ -570,7 +572,6 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
   xyzq[1].x = a + 0.5*L;
   xyzq[1].y = a + 0.5*L;
   xyzq[1].z = a + 0.5*L;
-  */
   
   xyzq[0].q = -1.0;
   xyzq[1].q = 1.0;
@@ -586,9 +587,9 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
   cpuGSEr.spreadCharge2();
   cpuGSEr.solvePoisson();
   double energy_GSEr = cpuGSEr.calculateEnergy();
-  std::cout << "energy_GSEr = " << energy_GSEr << std::endl;
+  std::cout << "energy_GSEr " << energy_GSEr << std::endl;
   cpuGSEr.interpolateForce(2, xyzq, forceX, forceY, forceZ);
-  printf("GSEr: %lf %lf %lf | %lf %lf %lf\n",forceX[0],forceY[0],forceZ[0],forceX[1],forceY[1],forceZ[1]);
+  printf("GSEr: %.12lf %.12lf %.12lf | %.12lf %.12lf %.12lf\n",forceX[0],forceY[0],forceZ[0],forceX[1],forceY[1],forceZ[1]);
 #endif
   
   //--------------------------------------------------------------------------------------------------------
@@ -599,7 +600,7 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
   cpuGSEk.spreadCharge1(2, xyzq);
   cpuGSEk.solvePoisson();
   double energy_GSEk = cpuGSEk.calculateEnergy();
-  std::cout << "energy_GSEk = " << energy_GSEk << std::endl;
+  std::cout << "energy_GSEk " << energy_GSEk << std::endl;
   CpuGrid<double> Ex(ngrid, ngrid, ngrid);
   CpuGrid<double> Ey(ngrid, ngrid, ngrid);
   CpuGrid<double> Ez(ngrid, ngrid, ngrid);
@@ -610,7 +611,7 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
   Ez.save("EzGSEk.txt");
   cpuGSEk.getPhi().save("phi.txt");
   cpuGSEk.interpolateForce(2, xyzq, forceX, forceY, forceZ);
-  printf("GSEk: %lf %lf %lf | %lf %lf %lf\n",forceX[0],forceY[0],forceZ[0],forceX[1],forceY[1],forceZ[1]);
+  printf("GSEk: %.12lf %.12lf %.12lf | %.12lf %.12lf %.12lf\n",forceX[0],forceY[0],forceZ[0],forceX[1],forceY[1],forceZ[1]);
 
   //#define USE_GSE_U
 #ifdef USE_GSE_U
@@ -621,9 +622,9 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
   cpuGSEu.spreadCharge1(2, xyzq);
   cpuGSEu.solvePoisson();
   double energy_GSEu = cpuGSEu.calculateEnergy();
-  std::cout << "energy_GSEu = " << energy_GSEu << std::endl;
+  std::cout << "energy_GSEu " << energy_GSEu << std::endl;
   cpuGSEu.interpolateForce(2, xyzq, forceX, forceY, forceZ);
-  printf("GSEu: %lf %lf %lf | %lf %lf %lf\n",forceX[0],forceY[0],forceZ[0],forceX[1],forceY[1],forceZ[1]);
+  printf("GSEu: %.12lf %.12lf %.12lf | %.12lf %.12lf %.12lf\n",forceX[0],forceY[0],forceZ[0],forceX[1],forceY[1],forceZ[1]);
   cpuGSEu.getPhi().save("phiU.txt");
 #endif
   
@@ -671,6 +672,19 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
   rhoS_k.save("rhoS_k.txt");
 #endif
 
+#ifdef CUDA_ON
+  //#define USE_SPME
+#ifdef USE_SPME
+  //--------------------------------------------------------------------------------------------------------
+  // SPME
+  //--------------------------------------------------------------------------------------------------------
+  double energy_SPME;
+  testRandom_gpu(2, boxx, ngrid, sigma, order, xyzq, energy_SPME, forceX, forceY, forceZ);
+  std::cout << "energy_SPME " << energy_SPME << std::endl;
+  printf("SPME: %.12lf %.12lf %.12lf | %.12lf %.12lf %.12lf\n",forceX[0],forceY[0],forceZ[0],forceX[1],forceY[1],forceZ[1]);
+#endif
+#endif
+
 #define USE_LES
 #ifdef USE_LES
   //--------------------------------------------------------------------------------------------------------  
@@ -704,11 +718,11 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
   double energy_LES = cpuLES.calcTotalEnergy();
 #endif
   double energy_dip = cpuLES.calcDipoleEnergy(2, xyzq);
-  std::cout << "energy_LES = " << energy_LES-energy_dip  << " (" << energy_LES << " , " << energy_dip << ")" << std::endl;
+  std::cout << "energy_LES " << energy_LES-energy_dip  << " (" << energy_LES << " , " << energy_dip << ")" << std::endl;
   printf("%18.14lf %18.14lf\n",energy_LES,energy_dip);
   err = cpuLES.checkGaussLaw();
   printf("Error in Gauss Law = %e\n",err);
-  printf("max(curlB) = %e\n",cpuLES.maxCurlB());
+  printf("max(curlB) = %e | energy_B = %e\n",cpuLES.maxCurlB(),cpuLES.calcTotalMagneticEnergy());
   printf("max(curlE) = %e\n",cpuLES.maxCurlE());
 
   cpuLES.getEx().save("ExLES.txt");
@@ -722,7 +736,7 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
   cpuLES.chargeFluctuation(sigma/sqrt(2.0), 3.0, 2, xyzq, xyzq);
   cpuLES.interpolateForce(sigma/sqrt(2.0), 3.0, 2, xyzq, forceX, forceY, forceZ);
 #endif
-  printf("LES(J): %lf %lf %lf | %lf %lf %lf\n",forceX[0],forceY[0],forceZ[0],forceX[1],forceY[1],forceZ[1]);
+  printf("LES(J): %.12lf %.12lf %.12lf | %.12lf %.12lf %.12lf\n",forceX[0],forceY[0],forceZ[0],forceX[1],forceY[1],forceZ[1]);
 
 #ifdef USE_GSE_R
   gaussCharge.calcElectricFieldOnGrid(boxx, boxy, boxz, cpuGSEr.getPhi(), Ex, Ey, Ez);
@@ -738,8 +752,8 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
   double refX[2], refY[2], refZ[2];
   CpuEwaldRecip cpuEwald(sigma, 24*ngrid/boxx, boxx, boxy, boxz);
   double energy_ew = cpuEwald.calcForceEnergy(2, xyzq, refX, refY, refZ);
-  std::cout << "energy_ew = " << energy_ew << std::endl;
-  printf("EWALD: %lf %lf %lf | %lf %lf %lf\n",refX[0],refY[0],refZ[0],refX[1],refY[1],refZ[1]);
+  std::cout << "energy_ew " << energy_ew << std::endl;
+  printf("EWALD: %.12lf %.12lf %.12lf | %.12lf %.12lf %.12lf\n",refX[0],refY[0],refZ[0],refX[1],refY[1],refZ[1]);
 #ifdef USE_LES
   printf("rms = %e\n",Erms(2, refX, refY, refZ, forceX, forceY, forceZ));
 #endif

@@ -16,7 +16,7 @@
 #define B_CURL_TYPE -2
 #define DIV_TYPE -2
 #else
-#define E_CURL_TYPE 12
+#define E_CURL_TYPE 1
 #define B_CURL_TYPE -1
 #define DIV_TYPE -1
 #endif
@@ -812,6 +812,7 @@ void CpuLES<AT, CT>::interpolateForce(const double sigma1, const double lambdaSi
   // Dipole part
   AT dipSumX, dipSumY, dipSumZ;
   gaussCharge.calcDipoleSum(boxx, boxy, boxz, rho, dipSumX, dipSumY, dipSumZ);
+  printf("EdipX = %20.18lf\n",4.0*pi_dbl/(boxx*boxy*boxz)*dipSumX);
   AT EdipX = 4.0*pi_dbl/(boxx*boxy*boxz)*dipSumX*ccelec;
   AT EdipY = 4.0*pi_dbl/(boxx*boxy*boxz)*dipSumY*ccelec;
   AT EdipZ = 4.0*pi_dbl/(boxx*boxy*boxz)*dipSumZ*ccelec;

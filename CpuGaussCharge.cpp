@@ -259,7 +259,8 @@ void CpuGaussCharge<AT, CT>::spreadChargeToGrid(const double sigma, const double
 
   printf("CpuGaussCharge::spreadChargeToGrid, rcut=%lf nx=%d support=%d\n",
 	 rcut,nx,calcSupportSize(rcut, boxx, boxy, boxz));
-  
+
+  /*
   // Spread charge on grid
   CT* rhodata = rho.getDataPointer();
   for (int i=0;i < numCoord;i++) {
@@ -291,7 +292,59 @@ void CpuGaussCharge<AT, CT>::spreadChargeToGrid(const double sigma, const double
       }
     }
   }
+  */
   
+  CT* wx = new CT[2*nx+1];
+  CT* wy = new CT[2*ny+1];
+  CT* wz = new CT[2*nz+1];
+  
+  // Spread charge on grid
+  CT* rhodata = rho.getDataPointer();
+  for (int i=0;i < numCoord;i++) {
+    CT x = xyzq[i].x;
+    CT y = xyzq[i].y;
+    CT z = xyzq[i].z;
+    CT q = xyzq[i].q*pref;
+    int ixc = (int)round(x*inv_hx) - nx;
+    int iyc = (int)round(y*inv_hy) - ny;
+    int izc = (int)round(z*inv_hz) - nz;
+    const CT dx = ixc*hx - x;
+    const CT dy = iyc*hy - y;
+    const CT dz = izc*hz - z;
+    // Calculate 1d weights
+    for (int j=-0;j <= 2*nx;j++) {
+      CT x = dx + j*hx;
+      wx[j] = expf(-x*x*inv_2sigmasq);
+    }
+    for (int j=-0;j <= 2*ny;j++) {
+      CT y = dy + j*hy;
+      wy[j] = expf(-y*y*inv_2sigmasq);
+    }
+    for (int j=-0;j <= 2*nz;j++) {
+      CT z = dz + j*hz;
+      wz[j] = q*expf(-z*z*inv_2sigmasq);
+    }
+    // Make sure (ixc, iyc, izc) are non-negative
+    ixc = (ixc + sizeX) % sizeX;
+    iyc = (iyc + sizeY) % sizeY;
+    izc = (izc + sizeZ) % sizeZ;
+    //
+    for (int tz=0;tz <= 2*nz;tz++) {
+      for (int ty=0;ty <= 2*ny;ty++) {
+	for (int tx=0;tx <= 2*nx;tx++) {
+	  int ix = (ixc + tx) % sizeX;
+	  int iy = (iyc + ty) % sizeY;
+	  int iz = (izc + tz) % sizeZ;
+	  const int p = ix + (iy + iz*sizeY)*sizeX;
+	  rhodata[p] += wx[tx]*wy[ty]*wz[tz];
+	}
+      }
+    }
+  }
+  
+  delete [] wx;
+  delete [] wy;
+  delete [] wz;
 }
 
 //
@@ -432,5 +485,6 @@ void CpuGaussCharge<AT, CT>::spreadChargeOnGrid(const double sigma, const double
 //
 // Explicit instances of CpuGaussCharge
 //
+template class CpuGaussCharge<float, float>;
 template class CpuGaussCharge<double, float>;
 template class CpuGaussCharge<double, double>;
