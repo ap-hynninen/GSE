@@ -16,6 +16,14 @@ private:
   const int sizeY;
   const int sizeZ;
 
+  // Stores (x, y, z, q) in sizeX*sizeY*sizeZ grid
+  float4* xyzqGrid;
+  // Stores (x, y, z, q) in a simple list
+  int xyzqOverflowLen;
+  float4* xyzqOverflow;
+  // Global position into xyzqOverflow
+  int* pOverflow;
+  
 public:
   CudaGaussCharge(const int sizeX, const int sizeY, const int sizeZ);
   ~CudaGaussCharge();

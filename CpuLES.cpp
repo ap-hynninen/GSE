@@ -284,7 +284,7 @@ void CpuLES<AT,CT>::calcDipoleSum(const int numCoord, const xyzq_t<CT> *xyzq,
 template <typename AT, typename CT>
 void CpuLES<AT,CT>::spreadCharge1(const double sigma1, const double lambdaSigma1, const int numCoord, const xyzq_t<CT> *xyzq) {
   gaussCharge.spreadChargeToGrid(sigma1, lambdaSigma1*sqrt(2.0)*sigma1, numCoord, xyzq,
-  				 boxx, boxy, boxz, rho);
+  				 boxx, boxy, boxz, rho, true);
 }
 
 //
@@ -339,7 +339,7 @@ double CpuLES<AT,CT>::checkGaussLaw() {
 	double err = fabs(rho.getDataValue(ix,iy,iz)*fourpi_h - divE);
 	max_err = (err > max_err) ? err : max_err;
 	if (err > 1.0e-9) {
-	  printf("%d %d %d | %e %e %e\n",ix,iy,iz,Ex.getDataValue(ix,iy,iz),Ey.getDataValue(ix,iy,iz),Ez.getDataValue(ix,iy,iz));
+	  printf("BOO %d %d %d | %e %e %e\n",ix,iy,iz,Ex.getDataValue(ix,iy,iz),Ey.getDataValue(ix,iy,iz),Ez.getDataValue(ix,iy,iz));
 	}
       }
     }

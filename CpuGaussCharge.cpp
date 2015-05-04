@@ -228,11 +228,14 @@ void CpuGaussCharge<AT, CT>::calcDipoleSum(const double boxx, const double boxy,
 //
 // Particle to grid charge spreading
 //
+// If normalize = true, weights are shifted to zero and re-normalized to preserve total charge volume
+// exactly.
+//
 template <typename AT, typename CT>
 void CpuGaussCharge<AT, CT>::spreadChargeToGrid(const double sigma, const double rcut,
 						const int numCoord, const xyzq_t<CT> *xyzq,
 						const double boxx, const double boxy, const double boxz,
-						CpuGrid<CT>& rho) {
+						CpuGrid<CT>& rho, const bool normalize) {
   // Sanity checks
   assert(sizeX == rho.getSizeX());
   assert(sizeY == rho.getSizeY());
@@ -304,7 +307,7 @@ void CpuGaussCharge<AT, CT>::spreadChargeToGrid(const double sigma, const double
     CT x = xyzq[i].x;
     CT y = xyzq[i].y;
     CT z = xyzq[i].z;
-    CT q = xyzq[i].q*pref;
+    CT q_pref = xyzq[i].q*pref;
     int ixc = (int)round(x*inv_hx) - nx;
     int iyc = (int)round(y*inv_hy) - ny;
     int izc = (int)round(z*inv_hz) - nz;
@@ -312,17 +315,50 @@ void CpuGaussCharge<AT, CT>::spreadChargeToGrid(const double sigma, const double
     const CT dy = iyc*hy - y;
     const CT dz = izc*hz - z;
     // Calculate 1d weights
-    for (int j=-0;j <= 2*nx;j++) {
+    for (int j=0;j <= 2*nx;j++) {
       CT x = dx + j*hx;
-      wx[j] = expf(-x*x*inv_2sigmasq);
+      wx[j] = exp(-x*x*inv_2sigmasq);
     }
-    for (int j=-0;j <= 2*ny;j++) {
+    for (int j=0;j <= 2*ny;j++) {
       CT y = dy + j*hy;
-      wy[j] = expf(-y*y*inv_2sigmasq);
+      wy[j] = exp(-y*y*inv_2sigmasq);
     }
-    for (int j=-0;j <= 2*nz;j++) {
+    for (int j=0;j <= 2*nz;j++) {
       CT z = dz + j*hz;
-      wz[j] = q*expf(-z*z*inv_2sigmasq);
+      wz[j] = exp(-z*z*inv_2sigmasq);
+    }
+    if (normalize) {
+      const CT pref1 = (CT)sqrt(2.0*pi_dbl*sigma*sigma);
+      CT shiftx = 0;//(wx[0] < wx[2*nx]) ? wx[0] : wx[2*nx];
+      CT shifty = 0;//(wy[0] < wy[2*ny]) ? wy[0] : wy[2*ny];
+      CT shiftz = 0;//(wz[0] < wz[2*nz]) ? wz[0] : wz[2*nz];
+      CT normx = (CT)0;
+      for (int j=0;j <= 2*nx;j++) {
+	wx[j] -= shiftx;
+	normx += wx[j];
+      }
+      normx = pref1/normx;
+      for (int j=0;j <= 2*nx;j++) {
+	wx[j] *= normx;
+      }
+      CT normy = (CT)0;
+      for (int j=0;j <= 2*ny;j++) {
+	wy[j] -= shifty;
+	normy += wy[j];
+      }
+      normy = pref1/normy;
+      for (int j=0;j <= 2*ny;j++) {
+	wy[j] *= normy;
+      }
+      CT normz = (CT)0;
+      for (int j=0;j <= 2*nz;j++) {
+	wz[j] -= shiftz;
+	normz += wz[j];
+      }
+      normz = pref1/normz;
+      for (int j=0;j <= 2*nz;j++) {
+	wz[j] *= normz;
+      }
     }
     // Make sure (ixc, iyc, izc) are non-negative
     ixc = (ixc + sizeX) % sizeX;
@@ -336,7 +372,7 @@ void CpuGaussCharge<AT, CT>::spreadChargeToGrid(const double sigma, const double
 	  int iy = (iyc + ty) % sizeY;
 	  int iz = (izc + tz) % sizeZ;
 	  const int p = ix + (iy + iz*sizeY)*sizeX;
-	  rhodata[p] += wx[tx]*wy[ty]*wz[tz];
+	  rhodata[p] += q_pref*wx[tx]*wy[ty]*wz[tz];
 	}
       }
     }

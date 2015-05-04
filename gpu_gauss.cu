@@ -50,7 +50,7 @@ void loadArray(const int width, const int numLine, const char *filename, T *arra
 //
 template<typename T>
 void test() {
-  const double sigma = 2.12132034355964;
+  const double sigma = 2.12132034355964/sqrt(2.0);
   const double lambdaSigma = 3.0;
   const int n = 64;
   const int numCoord = 23558;

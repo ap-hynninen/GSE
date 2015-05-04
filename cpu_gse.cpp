@@ -3,7 +3,9 @@
 #include <iostream>
 #include <fstream>
 #include "CpuGSEr.h"
+#ifdef USE_FFTW
 #include "CpuGSEk.h"
+#endif
 #include "CpuGSEu.h"
 #include "CpuEwaldRecip.h"
 #include "CpuGaussCharge.h"
@@ -14,6 +16,19 @@
 #include "cuda/cuda_utils.h"
 #include "gpu_gse.h"
 #endif
+
+// Defines what we're computing:
+#ifdef USE_FFTW
+#define USE_GSE_K
+#endif
+
+#ifdef CUDA_ON
+//#define USE_SPME
+#endif
+
+//#define USE_GSE_R
+//#define USE_GSE_U
+#define USE_LES
 
 void test48K();
 void testRandom(const int numCoord, const double L, const int ngrid, const double sigma, const int order, unsigned seed);
@@ -212,6 +227,7 @@ void test48K() {
   xyzq_t<double>* xyzq = new xyzq_t<double>[numCoord];
   loadArray<double>(4, numCoord, "data/xyzq_48k.txt", (double *)xyzq);
 
+#ifdef USE_GSE_K
   //--------------------------------------------------------------------------------------------------------
   // GSE-k
   //--------------------------------------------------------------------------------------------------------
@@ -226,7 +242,8 @@ void test48K() {
   std::cout << "energy_GSEk = " << energy_GSEk << std::endl;
   cpuGSEk.interpolateForce(numCoord, xyzq, forceXGSEk, forceYGSEk, forceZGSEk);
   saveForce<double>("forceGSEk.txt", numCoord, forceXGSEk, forceYGSEk, forceZGSEk);
-
+#endif
+  
 #ifdef USE_GSE_U
   //--------------------------------------------------------------------------------------------------------
   // GSE-u
@@ -238,7 +255,6 @@ void test48K() {
   std::cout << "energy_GSEu = " << energy_GSEu << std::endl;
 #endif
 
-  //#define USE_LES
 #ifdef USE_LES
   //--------------------------------------------------------------------------------------------------------
   // LES
@@ -268,8 +284,6 @@ void test48K() {
   saveForce<double>("forceLES.txt", numCoord, forceXLES, forceYLES, forceZLES);
 #endif
 
-#ifdef CUDA_ON
-  //#define USE_SPME
 #ifdef USE_SPME
   //--------------------------------------------------------------------------------------------------------
   // SPME
@@ -280,7 +294,6 @@ void test48K() {
   double energy_SPME;
   testRandom_gpu(numCoord, boxx, ngrid, sigma, order, xyzq, energy_SPME, forceXSPME, forceYSPME, forceZSPME);
   saveForce<double>("forceSPME.txt", numCoord, forceXSPME, forceYSPME, forceZSPME);
-#endif
 #endif
 
   //--------------------------------------------------------------------------------------------------------  
@@ -300,9 +313,11 @@ void test48K() {
   readForce<double>("forceEW64.txt",numCoord, forceXew, forceYew, forceZew);
 #endif
   std::cout << "energy_ew = " << energy_ew << std::endl;
-  
+
+#ifdef USE_GSE_K
   printf("rms(GSEk) = %e %e\n",Erms(numCoord, forceXew, forceYew, forceZew, forceXGSEk, forceYGSEk, forceZGSEk),
 	 fabs((energy_ew-energy_GSEk)/energy_ew));
+#endif
 #ifdef USE_LES
   printf("rms(LES) = %e %e\n",Erms(numCoord, forceXew, forceYew, forceZew, forceXLES, forceYLES, forceZLES),
 	 fabs((energy_ew-energy_LES)/energy_ew));
@@ -314,10 +329,12 @@ void test48K() {
   
   delete [] xyzq;
 
+#ifdef USE_GSE_K
   delete [] forceXGSEk;
   delete [] forceYGSEk;
   delete [] forceZGSEk;
-
+#endif
+  
 #ifdef USE_LES
   delete [] forceXLES;
   delete [] forceYLES;
@@ -350,7 +367,6 @@ void testRandom(const int numCoord, const double L, const int ngrid, const doubl
     xyzq[i].q = (double)((i%2)*2 - 1);
   }
 
-#define USE_GSE_K
 #ifdef USE_GSE_K
   //--------------------------------------------------------------------------------------------------------
   // GSE-k
@@ -367,8 +383,7 @@ void testRandom(const int numCoord, const double L, const int ngrid, const doubl
   cpuGSEk.interpolateForce(numCoord, xyzq, forceXGSEk, forceYGSEk, forceZGSEk);
   saveForce<double>("forceGSEk.txt", numCoord, forceXGSEk, forceYGSEk, forceZGSEk);
 #endif
-
-#define USE_GSE_R
+  
 #ifdef USE_GSE_R
   //--------------------------------------------------------------------------------------------------------
   // GSE-r
@@ -386,7 +401,7 @@ void testRandom(const int numCoord, const double L, const int ngrid, const doubl
   cpuGSEr.interpolateForce(numCoord, xyzq, forceXGSEr, forceYGSEr, forceZGSEr);
   saveForce<double>("forceGSEr.txt", numCoord, forceXGSEr, forceYGSEr, forceZGSEr);
 #endif
-
+  
 #ifdef USE_GSE_U
   //--------------------------------------------------------------------------------------------------------
   // GSE-u
@@ -398,7 +413,6 @@ void testRandom(const int numCoord, const double L, const int ngrid, const doubl
   std::cout << "energy_GSEu = " << energy_GSEu << std::endl;
 #endif
   
-  //#define USE_LES
 #ifdef USE_LES
   //--------------------------------------------------------------------------------------------------------
   // LES
@@ -448,8 +462,6 @@ void testRandom(const int numCoord, const double L, const int ngrid, const doubl
   saveForce<double>("forceLES.txt", numCoord, forceXLES, forceYLES, forceZLES);
 #endif
 
-#ifdef CUDA_ON
-#define USE_SPME
 #ifdef USE_SPME
   //--------------------------------------------------------------------------------------------------------
   // SPME
@@ -460,7 +472,6 @@ void testRandom(const int numCoord, const double L, const int ngrid, const doubl
   double energy_SPME;
   testRandom_gpu(numCoord, L, ngrid, sigma, order, xyzq, energy_SPME, forceXSPME, forceYSPME, forceZSPME);
   saveForce<double>("forceSPME.txt", numCoord, forceXSPME, forceYSPME, forceZSPME);
-#endif
 #endif
   
   //--------------------------------------------------------------------------------------------------------  
@@ -531,7 +542,7 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
   const double boxx = L;
   const double boxy = L;
   const double boxz = L;
-  const int order = 4;
+  const int order = 8;
   
   xyzq_t<double> xyzq[2];
   double forceX[2];
@@ -565,6 +576,7 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
   xyzq[1].z = r/2.0 + 0.5*boxz;
   */
 
+  /*
   double a = r/(2.0*sqrt(3.0));
   xyzq[0].x = -a + 0.5*L;
   xyzq[0].y = -a + 0.5*L;
@@ -572,11 +584,19 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
   xyzq[1].x = a + 0.5*L;
   xyzq[1].y = a + 0.5*L;
   xyzq[1].z = a + 0.5*L;
+  */
   
+  double a = r/sqrt(3.0);
+  xyzq[0].x = 0.0;
+  xyzq[0].y = 0.0;
+  xyzq[0].z = 0.0;
+  xyzq[1].x = a + 0.0;
+  xyzq[1].y = a + 0.0;
+  xyzq[1].z = a + 0.0;
+
   xyzq[0].q = -1.0;
   xyzq[1].q = 1.0;
 
-#define USE_GSE_R
 #ifdef USE_GSE_R
   //--------------------------------------------------------------------------------------------------------
   // GSE-r
@@ -591,7 +611,8 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
   cpuGSEr.interpolateForce(2, xyzq, forceX, forceY, forceZ);
   printf("GSEr: %.12lf %.12lf %.12lf | %.12lf %.12lf %.12lf\n",forceX[0],forceY[0],forceZ[0],forceX[1],forceY[1],forceZ[1]);
 #endif
-  
+
+#ifdef USE_GSE_K
   //--------------------------------------------------------------------------------------------------------
   // GSE-k
   //--------------------------------------------------------------------------------------------------------
@@ -612,8 +633,8 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
   cpuGSEk.getPhi().save("phi.txt");
   cpuGSEk.interpolateForce(2, xyzq, forceX, forceY, forceZ);
   printf("GSEk: %.12lf %.12lf %.12lf | %.12lf %.12lf %.12lf\n",forceX[0],forceY[0],forceZ[0],forceX[1],forceY[1],forceZ[1]);
+#endif
 
-  //#define USE_GSE_U
 #ifdef USE_GSE_U
   //--------------------------------------------------------------------------------------------------------
   // GSE-u
@@ -672,8 +693,6 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
   rhoS_k.save("rhoS_k.txt");
 #endif
 
-#ifdef CUDA_ON
-  //#define USE_SPME
 #ifdef USE_SPME
   //--------------------------------------------------------------------------------------------------------
   // SPME
@@ -683,9 +702,7 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
   std::cout << "energy_SPME " << energy_SPME << std::endl;
   printf("SPME: %.12lf %.12lf %.12lf | %.12lf %.12lf %.12lf\n",forceX[0],forceY[0],forceZ[0],forceX[1],forceY[1],forceZ[1]);
 #endif
-#endif
 
-#define USE_LES
 #ifdef USE_LES
   //--------------------------------------------------------------------------------------------------------  
   // LES
@@ -697,7 +714,8 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
   double sigmaB = cpuGSEk.getSigma2()/sqrt(2.0);
   cpuLES.spreadCharge1(sigmaA, 3.0, 2, xyzq);
 #else
-  cpuLES.spreadCharge1(sigma/sqrt(2.0), 3.0, 2, xyzq);
+  cpuLES.spreadCharge1(sigma/sqrt(2.0), 2.0, 2, xyzq);
+  cpuLES.getRho().save("rho.txt");
 #endif
 #ifdef TEST_CHARGE_SPREAD
   res.copy(cpuLES.getRho());
@@ -706,6 +724,9 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
 #endif
   cpuLES.clearMagneticField();
   cpuLES.initElectricFieldJR();
+  cpuLES.getEx().save("ExLESinit.txt");
+  cpuLES.getEy().save("EyLESinit.txt");
+  cpuLES.getEz().save("EzLESinit.txt");
   double err = cpuLES.checkGaussLaw();
   printf("Error in Gauss Law = %e\n",err);
   for (int i=0;i < 10000;i++) {
@@ -733,8 +754,8 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
   cpuLES.chargeFluctuation(sqrt(sigmaA*sigmaA + sigmaB*sigmaB), 3.0, 2, xyzq, xyzq);
   cpuLES.interpolateForce2(sqrt(sigmaA*sigmaA + sigmaB*sigmaB), 3.0, 2, xyzq, forceX, forceY, forceZ);
 #else
-  cpuLES.chargeFluctuation(sigma/sqrt(2.0), 3.0, 2, xyzq, xyzq);
-  cpuLES.interpolateForce(sigma/sqrt(2.0), 3.0, 2, xyzq, forceX, forceY, forceZ);
+  cpuLES.chargeFluctuation(sigma/sqrt(2.0), 2.0, 2, xyzq, xyzq);
+  cpuLES.interpolateForce(sigma/sqrt(2.0), 2.0, 2, xyzq, forceX, forceY, forceZ);
 #endif
   printf("LES(J): %.12lf %.12lf %.12lf | %.12lf %.12lf %.12lf\n",forceX[0],forceY[0],forceZ[0],forceX[1],forceY[1],forceZ[1]);
 
@@ -750,7 +771,7 @@ void testPair(const double r, const double L, const int ngrid, const double sigm
   // Ewald
   //--------------------------------------------------------------------------------------------------------
   double refX[2], refY[2], refZ[2];
-  CpuEwaldRecip cpuEwald(sigma, 24*ngrid/boxx, boxx, boxy, boxz);
+  CpuEwaldRecip cpuEwald(sigma, 32*ngrid/boxx, boxx, boxy, boxz);
   double energy_ew = cpuEwald.calcForceEnergy(2, xyzq, refX, refY, refZ);
   std::cout << "energy_ew " << energy_ew << std::endl;
   printf("EWALD: %.12lf %.12lf %.12lf | %.12lf %.12lf %.12lf\n",refX[0],refY[0],refZ[0],refX[1],refY[1],refZ[1]);

@@ -1,13 +1,18 @@
 How to build
 -------------
-make
 
-To cleanup an old build do "make clean"
+make [CUDA=off] [FFTW=off]
+
+Option CUDA=off switches off CUDA support and FFTW=off switches off FFTW support.
+
+To cleanup do:
+
+make clean
 
 Requirements
 -------------
 C++ compiler
-FFTW library
+FFTW library (optional)
 CUDA 5.0+ (optional, for SPME calculations)
 
 How to run

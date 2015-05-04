@@ -42,7 +42,7 @@ public:
   void spreadChargeToGrid(const double sigma, const double rcut,
 			  const int numCoord, const xyzq_t<CT> *xyzq,
 			  const double boxx, const double boxy, const double boxz,
-			  CpuGrid<CT>& rho);
+			  CpuGrid<CT>& rho, const bool normalize=false);
   void spreadChargeOnGrid(const double sigma, const double rcut,
 			  const double boxx, const double boxy, const double boxz,
 			  const CpuGrid<CT>& rho, CpuGrid<CT>& rhoS);

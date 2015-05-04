@@ -27,19 +27,30 @@ MPI_FOUND := $(shell which mpicc | wc -l 2> /dev/null)
 endif
 MPI_FOUND := $(NO)
 
+ifeq ($(CUDA),off)
+CUDA_COMPILER := $(NO)
+else
 CUDA_COMPILER := $(shell which nvcc | wc -l 2> /dev/null)
+endif
+
 INTEL_COMPILER := $(shell which icc | wc -l 2> /dev/null)
 
 # Detect FFTW
+ifeq ($(FFTW),off)
+FFTW_FOUND := $(NO)
+else
 FFTW_FOUND := $(shell which fftw-wisdom | wc -l 2> /dev/null)
+endif
+
 ifeq ($(FFTW_FOUND), $(YES))
 FFTWROOT = $(subst /bin/,,$(dir $(shell which fftw-wisdom)))
+DEFS = -D USE_FFTW
 endif
 
 #---------------------------------------------------------------
 ifeq ($(MPI_FOUND), $(YES))
 
-DEFS = -D USE_MPI
+DEFS += -D USE_MPI
 
 ifeq ($(OS),titan)
 CC = CC
@@ -59,8 +70,6 @@ endif  # ifeq ($(OS),titan)
 
 else   # MPI_FOUND
 
-DEFS = -D DONT_USE_MPI
-
 ifeq ($(INTEL_COMPILER), $(YES))
 CC = icc
 CL = icc
@@ -77,9 +86,12 @@ ifeq ($(CUDA_COMPILER), $(YES))
 DEFS += -D USE_TEXTURE_OBJECTS -D CUDA_ON
 endif
 
-OBJS_GSE = cpu_gse.o CpuGSE.o CpuGSEr.o CpuGSEk.o CpuMultiGridSolver.o \
-           CpuFFTSolver.o CpuEwaldRecip.o CpuGaussCharge.o CpuGreensFuncGSE.o \
+OBJS_GSE = cpu_gse.o CpuGSE.o CpuGSEr.o CpuMultiGridSolver.o \
+           CpuEwaldRecip.o CpuGaussCharge.o CpuGreensFuncGSE.o \
 	   CpuLES.o
+ifeq ($(FFTW_FOUND), $(YES))
+OBJS_GSE += CpuGSEk.o CpuFFTSolver.o
+endif
 ifeq ($(CUDA_COMPILER), $(YES))
 OBJS_GSE += gpu_gse.o cuda/CudaEnergyVirial.o cuda/EnergyVirial.o cuda/Matrix3d.o cuda/reduce.o \
 	    cuda/CudaPMERecip.o cuda/XYZQ.o cuda/Force.o cuda/cuda_utils.o
@@ -163,7 +175,7 @@ endif
 BINARIES = cpu_gse
 ifeq ($(CUDA_COMPILER), $(YES))
 BINARIES += gpu_conv
-BINARIES += gpu_gauss
+#BINARIES += gpu_gauss
 endif
 
 all: $(BINARIES)
