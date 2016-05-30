@@ -41,6 +41,8 @@ CpuLES<AT,CT>::CpuLES(const int sizeX, const int sizeY, const int sizeZ, const d
   Jy = NULL;
   JzLen = 0;
   Jz = NULL;
+
+  used_lapack = false;
 }
 
 //
@@ -282,9 +284,10 @@ void CpuLES<AT,CT>::calcDipoleSum(const int numCoord, const xyzq_t<CT> *xyzq,
 // Spread (interpolate) charge onto grid
 //
 template <typename AT, typename CT>
-void CpuLES<AT,CT>::spreadCharge1(const double sigma1, const double lambdaSigma1, const int numCoord, const xyzq_t<CT> *xyzq) {
+void CpuLES<AT,CT>::spreadCharge1(const double sigma1, const double lambdaSigma1, const int numCoord, const xyzq_t<CT> *xyzq,
+				  const bool normalize) {
   gaussCharge.spreadChargeToGrid(sigma1, lambdaSigma1*sqrt(2.0)*sigma1, numCoord, xyzq,
-  				 boxx, boxy, boxz, rho, true);
+  				 boxx, boxy, boxz, rho, normalize);
 }
 
 //
@@ -339,13 +342,251 @@ double CpuLES<AT,CT>::checkGaussLaw() {
 	double err = fabs(rho.getDataValue(ix,iy,iz)*fourpi_h - divE);
 	max_err = (err > max_err) ? err : max_err;
 	if (err > 1.0e-9) {
-	  printf("BOO %d %d %d | %e %e %e\n",ix,iy,iz,Ex.getDataValue(ix,iy,iz),Ey.getDataValue(ix,iy,iz),Ez.getDataValue(ix,iy,iz));
+	  printf("BOO %d %d %d | %e %e %e\n",ix,iy,iz,
+		 Ex.getDataValue(ix,iy,iz),Ey.getDataValue(ix,iy,iz),Ez.getDataValue(ix,iy,iz));
+	  return max_err;
 	}
       }
     }
   }
   return max_err;
 }
+
+#ifdef USE_LAPACK
+extern "C" void dgels( char* trans, int* m, int* n, int* nrhs, double* a, int* lda,
+                double* b, int* ldb, double* work, int* lwork, int* info );
+extern "C" void dgesv( int* n, int* nrhs, double* a, int* lda, int* ipiv,
+		       double* b, int* ldb, int* info );
+
+void print_matrix( char* desc, int m, int n, double* a, int lda ) {
+        int i, j;
+        printf( "\n %s\n", desc );
+        for( i = 0; i < m; i++ ) {
+                for( j = 0; j < n; j++ ) printf( " %6.2f", a[i+j*lda] );
+                printf( "\n" );
+        }
+}
+
+void testLAPACK() {
+  /*
+  // See:
+  // https://software.intel.com/sites/products/documentation/doclib/mkl_sa/11/mkl_lapack_examples/dgesv_ex.c.htm
+#define N 5
+#define NRHS 3
+#define LDA N
+#define LDB N
+  int n = N, nrhs = NRHS, lda = LDA, ldb = LDB, info;
+  // Local arrays
+  int ipiv[N];
+  double a[LDA*N] = {
+    6.80, -2.11,  5.66,  5.97,  8.23,
+    -6.05, -3.30,  5.36, -4.44,  1.08,
+    -0.45,  2.58, -2.70,  0.27,  9.04,
+    8.32,  2.71,  4.35, -7.17,  2.14,
+    -9.67, -5.14, -7.26,  6.08, -6.87
+  };
+  double b[LDB*NRHS] = {
+    4.02,  6.19, -8.22, -7.57, -3.03,
+    -1.56,  4.00, -8.67,  1.75,  2.86,
+    9.81, -4.09, -4.57, -8.61,  8.99
+  };
+  // Solve the equations A*X = B
+  dgesv( &n, &nrhs, a, &lda, ipiv, b, &ldb, &info );
+  print_matrix( "Solution", n, nrhs, b, ldb );
+  
+#undef N
+#undef NRHS
+#undef LDA
+#undef LDB
+*/
+  // See:
+  // https://software.intel.com/sites/products/documentation/doclib/mkl_sa/11/mkl_lapack_examples/index.htm#dgesv.htm
+  //  http://www.netlib.org/lapack/double/dgels.f
+#define M 6
+#define N 4
+#define NRHS 2
+#define LDA M
+#define LDB M
+  
+  /* Locals */
+  char notranspose[] = "No transpose";
+  int m = M, n = N, nrhs = NRHS, lda = LDA, ldb = LDB, info, lwork;
+  double wkopt;
+  double* work;
+  /* Local arrays */
+  double a[LDA*N] = {
+    1.44, -9.96, -7.55,  8.34,  7.08, -5.45,
+    -7.84, -0.28,  3.24,  8.09,  2.52, -5.70,
+    -4.39, -3.24,  6.27,  5.28,  0.74, -1.19,
+    4.53,  3.83, -6.64,  2.06, -2.47,  4.70
+  };
+  double b[LDB*NRHS] = {
+    8.58,  8.26,  8.48, -5.28,  5.72,  8.93,
+    9.35, -4.43, -0.70, -0.26, -7.36, -2.52
+  };
+  /* Executable statements */
+  printf( " DGELS Example Program Results\n" );
+  /* Query and allocate the optimal workspace */
+  lwork = -1;
+  dgels( notranspose, &m, &n, &nrhs, a, &lda, b, &ldb, &wkopt, &lwork,
+	 &info );
+  lwork = (int)wkopt;
+  work = (double*)malloc( lwork*sizeof(double) );
+  /* Solve the equations A*X = B */
+  dgels( notranspose, &m, &n, &nrhs, a, &lda, b, &ldb, work, &lwork,
+	 &info );
+  char lss[] = "Least squares solution";
+  print_matrix( lss, n, nrhs, b, ldb );
+#undef M
+#undef NRHS
+#undef LDA
+#undef LDB
+}
+
+//
+// Initialize electric field using by solving the linear equation div(E)=rho
+//
+template <typename AT, typename CT>
+void CpuLES<AT,CT>::initElectricFieldLAPACK() {
+  assert(sizeof(CT) == 8);
+  const int sizeX = rho.getSizeX();
+  const int sizeY = rho.getSizeY();
+  const int sizeZ = rho.getSizeZ();
+  const int size = rho.getSize();
+  
+  const double hd = boxx/(double)sizeX;
+  const CT fourpi_h = (CT)(4.0*pi_dbl*hd);
+
+  //testLAPACK();
+  //return;
+  
+  const CT* rhoData = rho.getDataPointer();
+
+  char notranspose[] = "No transpose";
+  // Number of rows in A
+  int m = size;
+  // Number of columns in A
+  int n = size*3;
+  // Number of columns in B
+  int nrhs = 1;
+  // Leading dimension of A
+  int lda = m;
+  // Leading dimension of B
+  int ldb = (m > n) ? m : n;
+  int lwork;
+  int info;
+
+  double* At = new double[size*3*size];
+  double* B = new double[3*size];
+
+  for (int i=0;i < size;i++) B[i] = fourpi_h*rhoData[i];
+  for (int i=0;i < size*3*size;i++) At[i] = 0.0;
+  FILE* handle = fopen("A.txt","w");
+  for (int l=0;l < size;l++) {
+    int rowpos = l*3*size;
+    // Compute ijk from row index l
+    int t = l;
+    int k = t/(sizeX*sizeY);
+    t -= k*sizeX*sizeY;
+    int j = t/sizeX;
+    t -= j*sizeX;
+    int i = t;
+    // Compute periodic i-1, j-1, and k-1
+    int mi = (i-1+sizeX)%sizeX;
+    int mj = (j-1+sizeY)%sizeY;
+    int mk = (k-1+sizeZ)%sizeZ;
+    int ijk = i + (j + k*sizeY)*sizeX;
+    int mijk = mi + (j + k*sizeY)*sizeX;
+    int imjk = i + (mj + k*sizeY)*sizeX;
+    int ijmk = i + (j + mk*sizeY)*sizeX;
+#if DIV_TYPE==-1
+    At[rowpos + 3*ijk + 0] = 1.0;
+    At[rowpos + 3*ijk + 1] = 1.0;
+    At[rowpos + 3*ijk + 2] = 1.0;
+    At[rowpos + 3*mijk + 0] = -1.0;
+    At[rowpos + 3*imjk + 1] = -1.0;
+    At[rowpos + 3*ijmk + 2] = -1.0;
+#endif
+#if DIV_TYPE==-2
+    int m2i = (i-2+sizeX)%sizeX;
+    int m2j = (j-2+sizeY)%sizeY;
+    int m2k = (k-2+sizeZ)%sizeZ;
+    int m2ijk = m2i + (j + k*sizeY)*sizeX;
+    int im2jk = i + (m2j + k*sizeY)*sizeX;
+    int ijm2k = i + (j + m2k*sizeY)*sizeX;
+    At[rowpos + 3*ijk + 0] = 3.0/2.0;
+    At[rowpos + 3*ijk + 1] = 3.0/2.0;
+    At[rowpos + 3*ijk + 2] = 3.0/2.0;
+    At[rowpos + 3*mijk + 0] = -2.0;
+    At[rowpos + 3*imjk + 1] = -2.0;
+    At[rowpos + 3*ijmk + 2] = -2.0;
+    At[rowpos + 3*m2ijk + 0] = 1.0/2.0;
+    At[rowpos + 3*im2jk + 1] = 1.0/2.0;
+    At[rowpos + 3*ijm2k + 2] = 1.0/2.0;
+#endif
+    for (int i=0;i < 3*size;i++) {
+      fprintf(handle,"%lf ",At[rowpos + i]);
+    }
+    fprintf(handle,"\n");
+  }
+  fclose(handle);
+  
+  handle = fopen("B.txt","w");
+  for (int i=0;i < size;i++) fprintf(handle,"%lf\n",B[i]);
+  fclose(handle);
+  
+  double* A = new double[size*3*size];
+  for (int j=0;j < size;j++) {
+    for (int i=0;i < 3*size;i++) {
+      A[i*size + j] = At[j*3*size + i];
+    }
+  }
+  
+  // Solve AX = B, solution X is in B
+  double lwork_dbl;
+  lwork = -1;
+  dgels(notranspose, &m, &n, &nrhs, A, &lda, B, &ldb, &lwork_dbl, &lwork, &info);
+  lwork = (int)lwork_dbl;
+  printf("lwork = %d\n",lwork);
+  double* work = new double[lwork];
+
+  dgels(notranspose, &m, &n, &nrhs, A, &lda, B, &ldb, work, &lwork, &info);  
+  printf("info = %d\n",info);
+
+  CT* ExData = Ex.getDataPointer();
+  CT* EyData = Ey.getDataPointer();
+  CT* EzData = Ez.getDataPointer();
+  for (int i=0;i < size;i++) {
+    ExData[i] = B[3*i+0];// + 0.009703423734375407;
+    EyData[i] = B[3*i+1];// + 0.009703423734375400;
+    EzData[i] = B[3*i+2];// + 0.009703423734375393;
+  }
+
+  used_lapack = true;
+  
+  /*
+  // Check result
+  double* X = new double[3*size];
+  for (int i=0;i < 3*size;i++) X[i] = B[i];
+  for (int i=0;i < size;i++) B[i] = fourpi_h*rhoData[i];
+  for (int j=0;j < size;j++) {
+    int rowpos = j*3*size;
+    double sum = 0.0;
+    for (int i=0;i < 3*size;i++) {
+      sum += At[rowpos+i]*X[i];
+    }
+    printf("%e\n",fabs(sum-B[j]));
+  }
+  delete [] X;
+  */
+  
+  delete [] A;
+  delete [] At;
+  delete [] B;
+  delete [] work;
+
+}
+#endif
 
 //
 // Initialize electric field, from Joerg Rottler code (maxwell.cpp)
@@ -694,6 +935,14 @@ void CpuLES<AT, CT>::interpolateForce(const double sigma1, const double lambdaSi
 
   printf("CpuLES::interpolateForce, rcut=%lf nx,ny,nz=%d %d %d\n",rcut,nx,ny,nz);
 
+  /*
+  AT dipSumX, dipSumY, dipSumZ;
+  gaussCharge.calcDipoleSum(boxx, boxy, boxz, rho, dipSumX, dipSumY, dipSumZ);
+  AT EdipX = 4.0*pi_dbl/(boxx*boxy*boxz)*dipSumX;
+  AT EdipY = 4.0*pi_dbl/(boxx*boxy*boxz)*dipSumY;
+  AT EdipZ = 4.0*pi_dbl/(boxx*boxy*boxz)*dipSumZ;
+  */
+  
   for (int i=0;i < numCoord;i++) {
     CT x = xyzq[i].x;
     CT y = xyzq[i].y;
@@ -742,6 +991,20 @@ void CpuLES<AT, CT>::interpolateForce(const double sigma1, const double lambdaSi
 	  CT Ezn = EzData[n];
 	  CT Ezp = EzData[pz];
 
+	  /*
+	  Exm += EdipX;
+	  Exn += EdipX;
+	  Exp += EdipX;
+
+	  Eym += EdipY;
+	  Eyn += EdipY;
+	  Eyp += EdipY;
+
+	  Ezm += EdipZ;
+	  Ezn += EdipZ;
+	  Ezp += EdipZ;
+	  */
+	  
 	  CT Jxm = (tx-1 >= -nx) ? Jx[jmx] : 0;
 	  CT Jxn = Jx[jn];
 	  CT Jxp = (tx+1 <=  nx) ? Jx[jpx] : 0;
@@ -808,139 +1071,24 @@ void CpuLES<AT, CT>::interpolateForce(const double sigma1, const double lambdaSi
     forceZ[i] = -fz*ccelec*hz*hz*hz;
   }
 
-  //printf("force: %e %e %e\n",forceX[0],forceY[0],forceZ[0]);
-  // Dipole part
-  AT dipSumX, dipSumY, dipSumZ;
-  gaussCharge.calcDipoleSum(boxx, boxy, boxz, rho, dipSumX, dipSumY, dipSumZ);
-  printf("EdipX = %20.18lf\n",4.0*pi_dbl/(boxx*boxy*boxz)*dipSumX);
-  AT EdipX = 4.0*pi_dbl/(boxx*boxy*boxz)*dipSumX*ccelec;
-  AT EdipY = 4.0*pi_dbl/(boxx*boxy*boxz)*dipSumY*ccelec;
-  AT EdipZ = 4.0*pi_dbl/(boxx*boxy*boxz)*dipSumZ*ccelec;
-  printf("Edip: %e %e %e\n",EdipX,EdipY,EdipZ);
-  for (int i=0;i < numCoord;i++) {
-    CT q = xyzq[i].q;
-    forceX[i] += q*EdipX;
-    forceY[i] += q*EdipY;
-    forceZ[i] += q*EdipZ;
-  }
-}
-
-//
-// Interpolate force
-//
-template <typename AT, typename CT>
-void CpuLES<AT, CT>::interpolateForce2(const double sigma1, const double lambdaSigma1, const int numCoord, const xyzq_t<CT> *xyzq,
-				       AT *forceX, AT *forceY, AT *forceZ) {
-  const int sizeX = rho.getSizeX();
-  const int sizeY = rho.getSizeY();
-  const int sizeZ = rho.getSizeZ();
-  const double rcut = lambdaSigma1*sqrt(2.0)*sigma1;
-  const double hxd = boxx/(double)sizeX;
-  const double hyd = boxy/(double)sizeY;
-  const double hzd = boxz/(double)sizeZ;
-  const int nx = (int)ceil(rcut/hxd);
-  const int ny = (int)ceil(rcut/hyd);
-  const int nz = (int)ceil(rcut/hzd);
-  const CT inv_hx = (CT)(1.0/hxd);
-  const CT inv_hy = (CT)(1.0/hyd);
-  const CT inv_hz = (CT)(1.0/hzd);
-  const CT hx = (CT)hxd;
-  const CT hy = (CT)hyd;
-  const CT hz = (CT)hzd;
-  const CT rcut2 = (CT)(rcut*rcut);
-  const CT inv_2sigmasq = (CT)(1.0/(2.0*sigma1*sigma1));
-
-  const CT* ExData = ExG.getDataPointer();
-  const CT* EyData = EyG.getDataPointer();
-  const CT* EzData = EzG.getDataPointer();
-
-  printf("CpuLES::interpolateForce2, rcut=%lf nx,ny,nz=%d %d %d\n",rcut,nx,ny,nz);
-
-  for (int i=0;i < numCoord;i++) {
-    CT x = xyzq[i].x;
-    CT y = xyzq[i].y;
-    CT z = xyzq[i].z;
-    int ix = (int)round(x*inv_hx);
-    int iy = (int)round(y*inv_hy);
-    int iz = (int)round(z*inv_hz);
-    AT fx = (AT)0.0;
-    AT fy = (AT)0.0;
-    AT fz = (AT)0.0;
-    int j0 = i*(2*nx+1)*(2*ny+1)*(2*nz+1);
-    for (int tz=-nz;tz <= nz;tz++) {
-      int oz = (iz+tz + sizeZ) % sizeZ;
-      for (int ty=-ny;ty <= ny;ty++) {
-	int oy = (iy+ty + sizeY) % sizeY;
-	for (int tx=-nx;tx <= nx;tx++) {
-	  int ox = (ix+tx + sizeX) % sizeX;
-
-	  int n = ox + (oy + oz*sizeY)*sizeX;
-	  int mx = (ox-1+sizeX)%sizeX + (oy + oz*sizeY)*sizeX;
-	  int px = (ox+1)%sizeX + (oy + oz*sizeY)*sizeX;
-	  int my = ox + ((oy-1+sizeY)%sizeY + oz*sizeY)*sizeX;
-	  int py = ox + ((oy+1)%sizeY + oz*sizeY)*sizeX;
-	  int mz = ox + (oy + ((oz-1+sizeZ)%sizeZ)*sizeY)*sizeX;
-	  int pz = ox + (oy + ((oz+1)%sizeZ)*sizeY)*sizeX;
-
-	  int jn = j0 + (tx+nx) + ((ty+ny) + (tz+nz)*(2*ny+1))*(2*nx+1);
-	  int jmx = j0 + (tx-1+nx) + ((ty+ny) + (tz+nz)*(2*ny+1))*(2*nx+1);
-	  int jpx = j0 + (tx+1+nx) + ((ty+ny) + (tz+nz)*(2*ny+1))*(2*nx+1);
-
-	  int jmy = j0 + (tx+nx) + ((ty-1+ny) + (tz+nz)*(2*ny+1))*(2*nx+1);
-	  int jpy = j0 + (tx+nx) + ((ty+1+ny) + (tz+nz)*(2*ny+1))*(2*nx+1);
-
-	  int jmz = j0 + (tx+nx) + ((ty+ny) + (tz-1+nz)*(2*ny+1))*(2*nx+1);
-	  int jpz = j0 + (tx+nx) + ((ty+ny) + (tz+1+nz)*(2*ny+1))*(2*nx+1);
-
-	  CT Exm = ExData[mx];
-	  CT Exn = ExData[n];
-	  CT Exp = ExData[px];
-
-	  CT Eym = EyData[my];
-	  CT Eyn = EyData[n];
-	  CT Eyp = EyData[py];
-
-	  CT Ezm = EzData[mz];
-	  CT Ezn = EzData[n];
-	  CT Ezp = EzData[pz];
-
-	  CT Jxm = (tx-1 >= -nx) ? Jx[jmx] : 0;
-	  CT Jxn = Jx[jn];
-	  CT Jxp = (tx+1 <=  nx) ? Jx[jpx] : 0;
-
-	  CT Jym = (ty-1 >= -ny) ? Jy[jmy] : 0;
-	  CT Jyn = Jy[jn];
-	  CT Jyp = (ty+1 <=  ny) ? Jy[jpy] : 0;
-
-	  CT Jzm = (tz-1 >= -nz) ? Jz[jmz] : 0;
-	  CT Jzn = Jz[jn];
-	  CT Jzp = (tz+1 <=  nz) ? Jz[jpz] : 0;
-
-	  fx += Jxn*(5.0/6.0*Exn + 1.0/24.0*(Exm + Exp)) + 1.0/24.0*(Jxm + Jxp)*Exn;
-	  fy += Jyn*(5.0/6.0*Eyn + 1.0/24.0*(Eym + Eyp)) + 1.0/24.0*(Jym + Jyp)*Eyn;
-	  fz += Jzn*(5.0/6.0*Ezn + 1.0/24.0*(Ezm + Ezp)) + 1.0/24.0*(Jzm + Jzp)*Ezn;
-	}
-      }
+  if (!used_lapack) {
+    // Dipole part
+    AT dipSumX, dipSumY, dipSumZ;
+    gaussCharge.calcDipoleSum(boxx, boxy, boxz, rho, dipSumX, dipSumY, dipSumZ);
+    printf("Edip = %20.18lf %20.18lf %20.18lf\n",4.0*pi_dbl/(boxx*boxy*boxz)*dipSumX,
+	   4.0*pi_dbl/(boxx*boxy*boxz)*dipSumY,4.0*pi_dbl/(boxx*boxy*boxz)*dipSumZ);
+    AT EdipX = 4.0*pi_dbl/(boxx*boxy*boxz)*dipSumX*ccelec;
+    AT EdipY = 4.0*pi_dbl/(boxx*boxy*boxz)*dipSumY*ccelec;
+    AT EdipZ = 4.0*pi_dbl/(boxx*boxy*boxz)*dipSumZ*ccelec;
+    printf("Edip: %e %e %e\n",EdipX,EdipY,EdipZ);
+    for (int i=0;i < numCoord;i++) {
+      CT q = xyzq[i].q;
+      forceX[i] += q*EdipX;
+      forceY[i] += q*EdipY;
+      forceZ[i] += q*EdipZ;
     }
-    forceX[i] = -fx*ccelec*hx*hx*hx;
-    forceY[i] = -fy*ccelec*hy*hy*hy;
-    forceZ[i] = -fz*ccelec*hz*hz*hz;
   }
- 
-  // Dipole part
-  AT dipSumX, dipSumY, dipSumZ;
-  gaussCharge.calcDipoleSum(boxx, boxy, boxz, rho, dipSumX, dipSumY, dipSumZ);
-  AT EdipX = 4.0*pi_dbl/(boxx*boxy*boxz)*dipSumX*ccelec;
-  AT EdipY = 4.0*pi_dbl/(boxx*boxy*boxz)*dipSumY*ccelec;
-  AT EdipZ = 4.0*pi_dbl/(boxx*boxy*boxz)*dipSumZ*ccelec;
-  printf("Edip: %e %e %e\n",EdipX,EdipY,EdipZ);
-  for (int i=0;i < numCoord;i++) {
-    CT q = xyzq[i].q;
-    forceX[i] += q*EdipX;
-    forceY[i] += q*EdipY;
-    forceZ[i] += q*EdipZ;
-  }
-
+  
 }
 
 //
@@ -951,7 +1099,8 @@ void CpuLES<AT, CT>::interpolateForce2(const double sigma1, const double lambdaS
 //
 template <typename AT, typename CT>
 void CpuLES<AT,CT>::chargeFluctuation(const double sigma, const double lambdaSigma,
-				      const int numCoord, const xyzq_t<CT> *xyzq_p, const xyzq_t<CT> *xyzq_c) {
+				      const int numCoord, const xyzq_t<CT> *xyzq_p, const xyzq_t<CT> *xyzq_c,
+				      const bool normalize) {
   const int sizeX = rho.getSizeX();
   const int sizeY = rho.getSizeY();
   const int sizeZ = rho.getSizeZ();
@@ -1070,10 +1219,46 @@ void CpuLES<AT,CT>::chargeFluctuation(const double sigma, const double lambdaSig
     for (int j=-nx;j <= nx;j++) wpx[j+nx] = pref*exp(-(dx+j)*(dx+j)*inv_sigma2sq);
     for (int j=-ny;j <= ny;j++) wpy[j+ny] = pref*exp(-(dy+j)*(dy+j)*inv_sigma2sq);
     for (int j=-nz;j <= nz;j++) wpz[j+nz] = pref*exp(-(dz+j)*(dz+j)*inv_sigma2sq);
-    for (int j=-nx;j <= nx;j++) dwpx[j+nx] = wpx[j+nx]*((-dx-j)*inv_sigmasq);
-    for (int j=-ny;j <= ny;j++) dwpy[j+ny] = wpy[j+ny]*((-dy-j)*inv_sigmasq);
-    for (int j=-nz;j <= nz;j++) dwpz[j+nz] = wpz[j+nz]*((-dz-j)*inv_sigmasq);
-   
+    if (normalize) {
+      CT normx = (CT)0;
+      CT dnormx = (CT)0;
+      for (int j=-nx;j <= nx;j++) {
+	normx += wpx[j+nx];
+	dnormx += wpx[j+nx]*((-dx-j)*inv_sigmasq);
+      }
+      normx = (CT)1/normx;
+      for (int j=-nx;j <= nx;j++) {
+	wpx[j+nx] *= normx;
+	dwpx[j+nx] = wpx[j+nx]*((-dx-j)*inv_sigmasq - dnormx*normx);
+      }      
+      CT normy = (CT)0;
+      CT dnormy = (CT)0;
+      for (int j=-ny;j <= ny;j++) {
+	normy += wpy[j+ny];
+	dnormy += wpy[j+ny]*((-dy-j)*inv_sigmasq);
+      }
+      normy = (CT)1/normy;
+      for (int j=-ny;j <= ny;j++) {
+	wpy[j+ny] *= normy;
+	dwpy[j+ny] = wpy[j+ny]*((-dy-j)*inv_sigmasq - dnormy*normy);
+      }      
+      CT normz = (CT)0;
+      CT dnormz = (CT)0;
+      for (int j=-nz;j <= nz;j++) {
+	normz += wpz[j+nz];
+	dnormz += wpz[j+nz]*((-dz-j)*inv_sigmasq);
+      }
+      normz = (CT)1/normz;
+      for (int j=-nz;j <= nz;j++) {
+	wpz[j+nz] *= normz;
+	dwpz[j+nz] = wpz[j+nz]*((-dz-j)*inv_sigmasq - dnormz*normz);
+      }      
+    } else {
+      for (int j=-nx;j <= nx;j++) dwpx[j+nx] = wpx[j+nx]*((-dx-j)*inv_sigmasq);
+      for (int j=-ny;j <= ny;j++) dwpy[j+ny] = wpy[j+ny]*((-dy-j)*inv_sigmasq);
+      for (int j=-nz;j <= nz;j++) dwpz[j+nz] = wpz[j+nz]*((-dz-j)*inv_sigmasq);
+    }
+    
     // Mid position
     dx = (CT)ixm - xm*inv_hx;
     dy = (CT)iym - ym*inv_hy;
@@ -1081,7 +1266,21 @@ void CpuLES<AT,CT>::chargeFluctuation(const double sigma, const double lambdaSig
     for (int j=-nx;j <= nx;j++) wmx[j+nx] = pref*exp(-(dx+j)*(dx+j)*inv_sigma2sq);
     for (int j=-ny;j <= ny;j++) wmy[j+ny] = pref*exp(-(dy+j)*(dy+j)*inv_sigma2sq);
     for (int j=-nz;j <= nz;j++) wmz[j+nz] = pref*exp(-(dz+j)*(dz+j)*inv_sigma2sq);
-
+    if (normalize) {
+      CT normx = (CT)0;
+      for (int j=-nx;j <= nx;j++) normx += wmx[j+nx];
+      normx = (CT)1/normx;
+      for (int j=-nx;j <= nx;j++) wmx[j+nx] *= normx;
+      CT normy = (CT)0;
+      for (int j=-ny;j <= ny;j++) normy += wmy[j+ny];
+      normy = (CT)1/normy;
+      for (int j=-ny;j <= ny;j++) wmy[j+ny] *= normy;
+      CT normz = (CT)0;
+      for (int j=-nz;j <= nz;j++) normz += wmz[j+nz];
+      normz = (CT)1/normz;
+      for (int j=-nz;j <= nz;j++) wmz[j+nz] *= normz;
+    }
+    
     // Current position
     dx = (CT)ixc - xc*inv_hx;
     dy = (CT)iyc - yc*inv_hy;
@@ -1089,7 +1288,21 @@ void CpuLES<AT,CT>::chargeFluctuation(const double sigma, const double lambdaSig
     for (int j=-nx;j <= nx;j++) wcx[j+nx] = pref*exp(-(dx+j)*(dx+j)*inv_sigma2sq);
     for (int j=-ny;j <= ny;j++) wcy[j+ny] = pref*exp(-(dy+j)*(dy+j)*inv_sigma2sq);
     for (int j=-nz;j <= nz;j++) wcz[j+nz] = pref*exp(-(dz+j)*(dz+j)*inv_sigma2sq);
-
+    if (normalize) {
+      CT normx = (CT)0;
+      for (int j=-nx;j <= nx;j++) normx += wcx[j+nx];
+      normx = (CT)1/normx;
+      for (int j=-nx;j <= nx;j++) wcx[j+nx] *= normx;
+      CT normy = (CT)0;
+      for (int j=-ny;j <= ny;j++) normy += wcy[j+ny];
+      normy = (CT)1/normy;
+      for (int j=-ny;j <= ny;j++) wcy[j+ny] *= normy;
+      CT normz = (CT)0;
+      for (int j=-nz;j <= nz;j++) normz += wcz[j+nz];
+      normz = (CT)1/normz;
+      for (int j=-nz;j <= nz;j++) wcz[j+nz] *= normz;
+    }
+    
     delq1x[0] = wcx[0] - wpx[0];
     jlinkx[0] = dwpx[0];
     for (int j=-nx+1;j <= nx;j++) {
@@ -1422,14 +1635,26 @@ CT CpuLES<AT,CT>::maxCurlE() {
 }
 
 //
-// Calculates dipole term energy
+// Calculates dipole term energy from charge density
 // NOTE: erf(L/(sqrt(2)*S)) term is dropped since it's usually close to 1.0
 //
 template <typename AT, typename CT>
-double CpuLES<AT,CT>::calcDipoleEnergy(const int numCoord, const xyzq_t<CT>* xyzq) {
+double CpuLES<AT,CT>::calcDipoleEnergy() {
+  if (used_lapack) return 0.0;
   AT dipSumX, dipSumY, dipSumZ;
   gaussCharge.calcDipoleSum(boxx, boxy, boxz, rho, dipSumX, dipSumY, dipSumZ);
   printf("dipSum = %lf %lf %lf\n",dipSumX, dipSumY, dipSumZ);
+  return 2.0*pi_dbl/(boxx*boxy*boxz)*(dipSumX*dipSumX + dipSumY*dipSumY + dipSumZ*dipSumZ)*ccelec;
+}
+
+//
+// Calculates dipole term energy from point charge positions
+//
+template <typename AT, typename CT>
+double CpuLES<AT,CT>::calcDipoleEnergy(const int numCoord, const xyzq_t<CT>* xyzq) {
+  if (used_lapack) return 0.0;
+  AT dipSumX, dipSumY, dipSumZ;
+  calcDipoleSum(numCoord, xyzq, dipSumX, dipSumY, dipSumZ);
   return 2.0*pi_dbl/(boxx*boxy*boxz)*(dipSumX*dipSumX + dipSumY*dipSumY + dipSumZ*dipSumZ)*ccelec;
 }
 

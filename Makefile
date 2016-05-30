@@ -48,6 +48,12 @@ DEFS = -D USE_FFTW
 endif
 
 #---------------------------------------------------------------
+# Set LAPACK
+ifeq ($(LAPACK),on)
+DEFS += -D USE_LAPACK
+endif
+
+#---------------------------------------------------------------
 ifeq ($(MPI_FOUND), $(YES))
 
 DEFS += -D USE_MPI
@@ -88,13 +94,15 @@ endif
 
 OBJS_GSE = cpu_gse.o CpuGSE.o CpuGSEr.o CpuMultiGridSolver.o \
            CpuEwaldRecip.o CpuGaussCharge.o CpuGreensFuncGSE.o \
-	   CpuLES.o
+	   CpuLES.o CpuEwaldDirect.o
 ifeq ($(FFTW_FOUND), $(YES))
 OBJS_GSE += CpuGSEk.o CpuFFTSolver.o
 endif
 ifeq ($(CUDA_COMPILER), $(YES))
 OBJS_GSE += gpu_gse.o cuda/CudaEnergyVirial.o cuda/EnergyVirial.o cuda/Matrix3d.o cuda/reduce.o \
-	    cuda/CudaPMERecip.o cuda/XYZQ.o cuda/Force.o cuda/cuda_utils.o
+	    cuda/CudaPMERecip.o cuda/XYZQ.o cuda/Force.o cuda/cuda_utils.o cuda/CudaDirectForceKernels.o \
+            cuda/CudaNeighborList.o cuda/CudaNeighborListBuild.o cuda/CudaNeighborListSort.o \
+	    cuda/CudaPMEDirectForce.o cuda/CudaTopExcl.o
 endif
 
 OBJS_GPU_CONV = gpu_conv.o cuda/cuda_utils.o CudaConvolution.o CpuConvolution.o
@@ -172,6 +180,11 @@ FFTW_CFLAGS = -I${FFTWROOT}/include
 FFTW_LFLAGS = -L$(FFTWROOT)/lib -lfftw3 -lfftw3f
 endif
 
+LAPACK_LFLAGS =
+ifeq ($(LAPACK),on)
+LAPACK_LFLAGS = -llapack -lblas
+endif
+
 BINARIES = cpu_gse
 ifeq ($(CUDA_COMPILER), $(YES))
 BINARIES += gpu_conv
@@ -181,7 +194,7 @@ endif
 all: $(BINARIES)
 
 cpu_gse : $(OBJS_GSE)
-	$(CL) $(OPENMP_OPT) $(CUDA_LFLAGS) $(FFTW_LFLAGS) -o cpu_gse $(OBJS_GSE)
+	$(CL) $(OPENMP_OPT) $(CUDA_LFLAGS) $(FFTW_LFLAGS) $(LAPACK_LFLAGS) -o cpu_gse $(OBJS_GSE)
 
 gpu_conv : $(OBJS_GPU_CONV)
 	$(CL) $(OPENMP_OPT) $(CUDA_LFLAGS) -o gpu_conv $(OBJS_GPU_CONV)

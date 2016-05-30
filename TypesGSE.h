@@ -1,7 +1,7 @@
 #ifndef TYPESGSE_H
 #define TYPESGSE_H
 
-//#define USE_NEW_K
+#define USE_NEW_K
 
 #ifdef USE_NEW_K
 #define AK (97.0/120.0)
